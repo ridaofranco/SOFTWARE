@@ -1,231 +1,292 @@
 "use client"
 
 import { useState } from "react"
-import { CalendarClock, Clock, Plus } from "lucide-react"
-import { format } from "date-fns"
-import { es } from "date-fns/locale"
-
-import { Badge } from "@/components/ui/badge"
+import { useUnifiedEventStore } from "@/store/unified-event-store"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
-import { useEventStore } from "@/lib/event-service"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Plus, Search, Filter, Clock, CheckCircle, AlertTriangle, User, Calendar, Bot, Zap } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
+import { InjectStandardTasks } from "./inject-standard-tasks"
 
 interface TasksListProps {
-  limit?: number
   eventId?: string
+  showEventFilter?: boolean
 }
 
-export function TasksList({ limit = 0, eventId }: TasksListProps) {
-  const allTasks = useEventStore((state) => state.tasks)
-  const events = useEventStore((state) => state.events)
-  const addTask = useEventStore((state) => state.addTask)
-  const updateTask = useEventStore((state) => state.updateTask)
+export default function TasksList({ eventId, showEventFilter = false }: TasksListProps) {
+  const { tasks, events, updateTask, deleteTask } = useUnifiedEventStore()
+  const { toast } = useToast()
 
-  const [newTaskOpen, setNewTaskOpen] = useState(false)
-  const [newTask, setNewTask] = useState({
-    title: "",
-    description: "",
-    dueDate: "",
-    priority: "media",
-    status: "pendiente",
-    eventId: eventId || "",
-    assignedTo: "",
+  const [searchTerm, setSearchTerm] = useState("")
+  const [statusFilter, setStatusFilter] = useState("all")
+  const [priorityFilter, setPriorityFilter] = useState("all")
+  const [categoryFilter, setCategoryFilter] = useState("all")
+  const [assigneeFilter, setAssigneeFilter] = useState("all")
+  const [showInjectDialog, setShowInjectDialog] = useState(false)
+
+  // Filter tasks based on eventId if provided
+  const filteredTasks = tasks.filter((task) => {
+    if (eventId && task.eventId !== eventId) return false
+
+    const matchesSearch =
+      task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      task.description.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesStatus = statusFilter === "all" || task.status === statusFilter
+    const matchesPriority = priorityFilter === "all" || task.priority === priorityFilter
+    const matchesCategory = categoryFilter === "all" || task.category === categoryFilter
+    const matchesAssignee = assigneeFilter === "all" || task.assignee === assigneeFilter
+
+    return matchesSearch && matchesStatus && matchesPriority && matchesCategory && matchesAssignee
   })
 
-  // Filter tasks if eventId is provided
-  const tasks = eventId ? allTasks.filter((task) => task.eventId === eventId) : allTasks
+  const handleStatusChange = (taskId: string, newStatus: string) => {
+    updateTask(taskId, { status: newStatus as any })
+    toast({
+      title: "Estado actualizado",
+      description: "El estado de la tarea ha sido actualizado",
+    })
+  }
 
-  // Apply limit if provided
-  const displayedTasks = limit > 0 ? tasks.slice(0, limit) : tasks
-
-  const handleTaskComplete = (taskId) => {
-    const task = tasks.find((t) => t.id === taskId)
-    if (task) {
-      updateTask(taskId, {
-        status: task.status === "completada" ? "pendiente" : "completada",
-      })
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "completed":
+        return <CheckCircle className="h-4 w-4 text-green-600" />
+      case "in-progress":
+        return <Clock className="h-4 w-4 text-blue-600" />
+      default:
+        return <AlertTriangle className="h-4 w-4 text-orange-600" />
     }
   }
 
-  const handleAddTask = () => {
-    addTask({
-      ...newTask,
-      id: `task-${Date.now()}`,
-    })
-
-    setNewTaskOpen(false)
-    setNewTask({
-      title: "",
-      description: "",
-      dueDate: "",
-      priority: "media",
-      status: "pendiente",
-      eventId: eventId || "",
-      assignedTo: "",
-    })
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "completed":
+        return "bg-green-100 text-green-800"
+      case "in-progress":
+        return "bg-blue-100 text-blue-800"
+      default:
+        return "bg-orange-100 text-orange-800"
+    }
   }
 
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case "high":
+        return "bg-red-100 text-red-800"
+      case "medium":
+        return "bg-yellow-100 text-yellow-800"
+      default:
+        return "bg-gray-100 text-gray-800"
+    }
+  }
+
+  const getEventName = (eventId: string) => {
+    const event = events.find((e) => e.id === eventId)
+    return event ? event.title || event.venue : "Evento desconocido"
+  }
+
+  // Get unique values for filters
+  const uniqueCategories = [...new Set(tasks.map((t) => t.category))]
+  const uniqueAssignees = [...new Set(tasks.map((t) => t.assignee))]
+
   return (
-    <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <div className="space-y-1">
-          {limit > 0 && (
-            <p className="text-sm text-muted-foreground">
-              Mostrando {Math.min(limit, displayedTasks.length)} de {tasks.length} tareas
-            </p>
-          )}
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold">{eventId ? "Tareas del Evento" : "Gestión de Tareas"}</h2>
+          <p className="text-gray-600">
+            {filteredTasks.length} tareas {eventId ? "para este evento" : "en total"}
+          </p>
         </div>
-        <Dialog open={newTaskOpen} onOpenChange={setNewTaskOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm">
-              <Plus className="h-4 w-4 mr-2" />
-              Nueva Tarea
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Crear Nueva Tarea</DialogTitle>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="title">Título</Label>
-                <Input
-                  id="title"
-                  value={newTask.title}
-                  onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
-                  placeholder="Título de la tarea"
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="description">Descripción</Label>
-                <Textarea
-                  id="description"
-                  value={newTask.description}
-                  onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
-                  placeholder="Descripción detallada"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="dueDate">Fecha límite</Label>
-                  <Input
-                    id="dueDate"
-                    type="date"
-                    value={newTask.dueDate}
-                    onChange={(e) => setNewTask({ ...newTask, dueDate: e.target.value })}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="priority">Prioridad</Label>
-                  <Select
-                    value={newTask.priority}
-                    onValueChange={(value) => setNewTask({ ...newTask, priority: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar prioridad" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="alta">Alta</SelectItem>
-                      <SelectItem value="media">Media</SelectItem>
-                      <SelectItem value="baja">Baja</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="event">Evento</Label>
-                  <Select value={newTask.eventId} onValueChange={(value) => setNewTask({ ...newTask, eventId: value })}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar evento" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {events.map((event) => (
-                        <SelectItem key={event.id} value={event.id}>
-                          {event.title}
-                        </SelectItem>
-                      ))}
-                      <SelectItem value="general">General (Todos los eventos)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="assignedTo">Asignado a</Label>
-                  <Input
-                    id="assignedTo"
-                    value={newTask.assignedTo}
-                    onChange={(e) => setNewTask({ ...newTask, assignedTo: e.target.value })}
-                    placeholder="Nombre del responsable"
-                  />
-                </div>
-              </div>
-              <Button onClick={handleAddTask} className="mt-2">
-                Crear Tarea
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+
+        <div className="flex gap-2">
+          <Button onClick={() => setShowInjectDialog(true)} variant="outline">
+            <Zap className="mr-2 h-4 w-4" />
+            Inyectar Tareas Estándar
+          </Button>
+          <Button>
+            <Plus className="mr-2 h-4 w-4" />
+            Nueva Tarea
+          </Button>
+        </div>
       </div>
 
-      <div className="space-y-4">
-        {displayedTasks.length === 0 ? (
-          <div className="text-center p-4 border rounded-md">
-            <p className="text-muted-foreground">No hay tareas pendientes</p>
-          </div>
-        ) : (
-          displayedTasks.map((task) => (
-            <div
-              key={task.id}
-              className={`flex items-start space-x-4 rounded-md border p-4 ${
-                task.status === "completada" ? "bg-muted/50" : ""
-              }`}
-            >
-              <Checkbox
-                checked={task.status === "completada"}
-                onCheckedChange={() => handleTaskComplete(task.id)}
-                className="mt-1"
-              />
-              <div className="flex-1 space-y-2">
-                <div className="flex items-center justify-between">
-                  <p
-                    className={`font-medium ${task.status === "completada" ? "line-through text-muted-foreground" : ""}`}
-                  >
-                    {task.title}
-                  </p>
-                  <Badge
-                    variant={
-                      task.priority === "alta" ? "destructive" : task.priority === "media" ? "default" : "outline"
-                    }
-                  >
-                    {task.priority.charAt(0).toUpperCase() + task.priority.slice(1)}
-                  </Badge>
-                </div>
-                <p className="text-sm text-muted-foreground">{task.description}</p>
-                <div className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-4">
-                    <span className="flex items-center gap-1">
-                      <Clock className="h-3 w-3" />
-                      {format(new Date(task.dueDate), "dd MMM yyyy", { locale: es })}
-                    </span>
-                    {task.eventId && (
-                      <span className="flex items-center gap-1">
-                        <CalendarClock className="h-3 w-3" />
-                        {events.find((e) => e.id === task.eventId)?.title || "General"}
-                      </span>
-                    )}
-                  </div>
-                  <span>{task.assignedTo}</span>
-                </div>
+      {/* Filters */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center">
+            <Filter className="mr-2 h-5 w-5" />
+            Filtros
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+            <div className="lg:col-span-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  placeholder="Buscar tareas..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
               </div>
             </div>
+
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Estado" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los estados</SelectItem>
+                <SelectItem value="pending">Pendiente</SelectItem>
+                <SelectItem value="in-progress">En progreso</SelectItem>
+                <SelectItem value="completed">Completada</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Prioridad" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas las prioridades</SelectItem>
+                <SelectItem value="high">Alta</SelectItem>
+                <SelectItem value="medium">Media</SelectItem>
+                <SelectItem value="low">Baja</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Categoría" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas las categorías</SelectItem>
+                {uniqueCategories.map((category) => (
+                  <SelectItem key={category} value={category}>
+                    {category}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={assigneeFilter} onValueChange={setAssigneeFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Asignado" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los asignados</SelectItem>
+                {uniqueAssignees.map((assignee) => (
+                  <SelectItem key={assignee} value={assignee}>
+                    {assignee}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Tasks List */}
+      <div className="space-y-4">
+        {filteredTasks.length === 0 ? (
+          <Card>
+            <CardContent className="text-center py-12">
+              <AlertTriangle className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No hay tareas</h3>
+              <p className="text-gray-600 mb-4">
+                {searchTerm ||
+                statusFilter !== "all" ||
+                priorityFilter !== "all" ||
+                categoryFilter !== "all" ||
+                assigneeFilter !== "all"
+                  ? "No se encontraron tareas con los filtros aplicados"
+                  : "Aún no hay tareas creadas"}
+              </p>
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Crear primera tarea
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          filteredTasks.map((task) => (
+            <Card key={task.id} className="hover:shadow-md transition-shadow">
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-start space-x-4 flex-1">
+                    <Checkbox
+                      checked={task.status === "completed"}
+                      onCheckedChange={(checked) => handleStatusChange(task.id, checked ? "completed" : "pending")}
+                      className="mt-1"
+                    />
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center space-x-2 mb-2">
+                        {getStatusIcon(task.status)}
+                        <h3 className="font-medium text-lg">{task.title}</h3>
+                        {task.isAutomated && (
+                          <Badge variant="outline" className="bg-purple-50 text-purple-700">
+                            <Bot className="w-3 h-3 mr-1" />
+                            Automática
+                          </Badge>
+                        )}
+                      </div>
+
+                      <p className="text-gray-600 mb-3">{task.description}</p>
+
+                      <div className="flex flex-wrap items-center gap-2 text-sm text-gray-500">
+                        <div className="flex items-center space-x-1">
+                          <Calendar className="h-4 w-4" />
+                          <span>Vence: {new Date(task.dueDate).toLocaleDateString("es-AR")}</span>
+                        </div>
+
+                        <div className="flex items-center space-x-1">
+                          <User className="h-4 w-4" />
+                          <span>{task.assignee}</span>
+                        </div>
+
+                        <Badge variant="outline">{task.category}</Badge>
+
+                        {showEventFilter && <Badge variant="secondary">{getEventName(task.eventId)}</Badge>}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-2 ml-4">
+                    <Badge className={getPriorityColor(task.priority)}>
+                      {task.priority === "high" ? "Alta" : task.priority === "medium" ? "Media" : "Baja"}
+                    </Badge>
+
+                    <Select value={task.status} onValueChange={(value) => handleStatusChange(task.id, value)}>
+                      <SelectTrigger className="w-32">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pending">Pendiente</SelectItem>
+                        <SelectItem value="in-progress">En progreso</SelectItem>
+                        <SelectItem value="completed">Completada</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           ))
         )}
       </div>
+
+      {/* Inject Standard Tasks Dialog */}
+      {showInjectDialog && <InjectStandardTasks eventId={eventId} onClose={() => setShowInjectDialog(false)} />}
     </div>
   )
 }
+
+// Named export for compatibility
+export { TasksList }
