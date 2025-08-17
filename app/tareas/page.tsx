@@ -5,7 +5,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Calendar, Clock, User, Filter, Search, Plus, CheckCircle, AlertCircle, Circle, Pause } from "lucide-react"
 import { useUnifiedEventStore } from "@/store/unified-event-store"
@@ -15,9 +14,8 @@ import {
   filterTasks,
   getOverdueTasks,
   getUpcomingTasks,
-  type AutomatedTask,
+  type Task,
 } from "@/lib/automated-tasks-service"
-import { DateTime } from "luxon"
 import { useToast } from "@/hooks/use-toast"
 
 export default function TasksPage() {
@@ -44,51 +42,67 @@ export default function TasksPage() {
 
   // Generate automated tasks for events that don't have them
   useEffect(() => {
-    events.forEach((event) => {
-      const eventTasks = tasks.filter((task) => task.eventId === event.id)
-      const hasAutomatedTasks = eventTasks.some((task) => task.isAutomated)
+    try {
+      events.forEach((event) => {
+        const eventTasks = tasks.filter((task) => task.eventId === event.id)
+        const hasAutomatedTasks = eventTasks.some((task) => task.isAutomated)
 
-      if (!hasAutomatedTasks && event.date) {
-        const automatedTasks = generateAutomatedTasks(event)
-        automatedTasks.forEach((task) => {
-          addTask(task)
-        })
-      }
-    })
+        if (!hasAutomatedTasks && event.date) {
+          const automatedTasks = generateAutomatedTasks(event)
+          automatedTasks.forEach((task) => {
+            addTask(task)
+          })
+        }
+      })
+    } catch (error) {
+      console.error("Error generating automated tasks:", error)
+    }
   }, [events, tasks, addTask])
 
   // Filter and search tasks
   const filteredTasks = useMemo(() => {
-    return filterTasks(tasks, {
-      status: statusFilter === "all" ? undefined : statusFilter,
-      priority: priorityFilter === "all" ? undefined : priorityFilter,
-      category: categoryFilter === "all" ? undefined : categoryFilter,
-      type: typeFilter === "all" ? undefined : typeFilter,
-      search: searchTerm || undefined,
-    })
+    try {
+      return filterTasks(tasks, {
+        status: statusFilter === "all" ? undefined : statusFilter,
+        priority: priorityFilter === "all" ? undefined : priorityFilter,
+        category: categoryFilter === "all" ? undefined : categoryFilter,
+        search: searchTerm || undefined,
+      })
+    } catch (error) {
+      console.error("Error filtering tasks:", error)
+      return []
+    }
   }, [tasks, searchTerm, statusFilter, priorityFilter, categoryFilter, typeFilter])
 
   // Get task statistics
-  const stats = getAutomatedTasksStats(filteredTasks)
-  const overdueTasks = getOverdueTasks(filteredTasks)
-  const upcomingTasks = getUpcomingTasks(filteredTasks)
+  const stats = useMemo(() => getAutomatedTasksStats(filteredTasks), [filteredTasks])
+  const overdueTasks = useMemo(() => getOverdueTasks(filteredTasks), [filteredTasks])
+  const upcomingTasks = useMemo(() => getUpcomingTasks(filteredTasks), [filteredTasks])
 
-  // Get unique categories and assignees for filters
-  const categories = Array.from(new Set(tasks.map((task) => task.category)))
-  const assignees = Array.from(new Set(tasks.map((task) => task.assignee).filter(Boolean)))
+  // Get unique categories for filters
+  const categories = useMemo(() => Array.from(new Set(tasks.map((task) => task.category))), [tasks])
 
   // Handle task status update
-  const handleStatusUpdate = (taskId: string, newStatus: AutomatedTask["status"]) => {
-    const now = DateTime.now().setZone("America/Argentina/Buenos_Aires").toISO() || ""
-    updateTask(taskId, {
-      status: newStatus,
-      updatedAt: now,
-    })
+  const handleStatusUpdate = (taskId: string, newStatus: Task["status"]) => {
+    try {
+      const now = new Date().toISOString()
+      updateTask(taskId, {
+        status: newStatus,
+        updatedAt: now,
+      })
 
-    toast({
-      title: "Tarea actualizada",
-      description: `Estado cambiado a ${newStatus}`,
-    })
+      toast({
+        title: "Tarea actualizada",
+        description: `Estado cambiado a ${newStatus}`,
+      })
+    } catch (error) {
+      console.error("Error updating task:", error)
+      toast({
+        title: "Error",
+        description: "No se pudo actualizar la tarea",
+        variant: "destructive",
+      })
+    }
   }
 
   // Handle new task creation
@@ -102,41 +116,49 @@ export default function TasksPage() {
       return
     }
 
-    const now = DateTime.now().setZone("America/Argentina/Buenos_Aires").toISO() || ""
-    const task: AutomatedTask = {
-      id: `manual-${Date.now()}`,
-      title: newTask.title,
-      description: newTask.description,
-      category: newTask.category,
-      priority: newTask.priority,
-      status: "pending",
-      dueDate: newTask.dueDate,
-      estimatedHours: newTask.estimatedHours,
-      assignee: newTask.assignee || undefined,
-      isAutomated: false,
-      eventId: newTask.eventId,
-      createdAt: now,
-      updatedAt: now,
-      type: "manual",
+    try {
+      const now = new Date().toISOString()
+      const task: Task = {
+        id: `manual-${Date.now()}`,
+        title: newTask.title,
+        description: newTask.description,
+        category: newTask.category,
+        priority: newTask.priority,
+        status: "pending",
+        dueDate: newTask.dueDate,
+        estimatedHours: newTask.estimatedHours,
+        assignee: newTask.assignee || undefined,
+        isAutomated: false,
+        eventId: newTask.eventId,
+        createdAt: now,
+        updatedAt: now,
+      }
+
+      addTask(task)
+      setShowNewTaskForm(false)
+      setNewTask({
+        title: "",
+        description: "",
+        category: "General",
+        priority: "medium",
+        dueDate: "",
+        estimatedHours: 1,
+        assignee: "",
+        eventId: "",
+      })
+
+      toast({
+        title: "Tarea creada",
+        description: "Nueva tarea agregada exitosamente",
+      })
+    } catch (error) {
+      console.error("Error creating task:", error)
+      toast({
+        title: "Error",
+        description: "No se pudo crear la tarea",
+        variant: "destructive",
+      })
     }
-
-    addTask(task)
-    setShowNewTaskForm(false)
-    setNewTask({
-      title: "",
-      description: "",
-      category: "General",
-      priority: "medium",
-      dueDate: "",
-      estimatedHours: 1,
-      assignee: "",
-      eventId: "",
-    })
-
-    toast({
-      title: "Tarea creada",
-      description: "Nueva tarea agregada exitosamente",
-    })
   }
 
   // Get status icon
@@ -170,11 +192,26 @@ export default function TasksPage() {
   }
 
   // Check if task is overdue
-  const isOverdue = (task: AutomatedTask) => {
+  const isOverdue = (task: Task) => {
     if (task.status === "completed") return false
-    const now = DateTime.now().setZone("America/Argentina/Buenos_Aires")
-    const dueDate = DateTime.fromISO(task.dueDate)
-    return dueDate < now
+    try {
+      const now = new Date()
+      const dueDate = new Date(task.dueDate)
+      return dueDate < now
+    } catch (error) {
+      console.error("Error checking if task is overdue:", error)
+      return false
+    }
+  }
+
+  // Format date
+  const formatDate = (dateString: string) => {
+    try {
+      return new Date(dateString).toLocaleDateString("es-AR")
+    } catch (error) {
+      console.error("Error formatting date:", error)
+      return dateString
+    }
   }
 
   return (
@@ -255,7 +292,7 @@ export default function TasksPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="relative">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input
@@ -305,238 +342,102 @@ export default function TasksPage() {
                 ))}
               </SelectContent>
             </Select>
-
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger>
-                <SelectValue placeholder="Tipo" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos los tipos</SelectItem>
-                <SelectItem value="automated">Automática</SelectItem>
-                <SelectItem value="manual">Manual</SelectItem>
-              </SelectContent>
-            </Select>
           </div>
         </CardContent>
       </Card>
 
-      {/* Tasks Tabs */}
-      <Tabs defaultValue="all" className="space-y-4">
-        <TabsList>
-          <TabsTrigger value="all">Todas ({filteredTasks.length})</TabsTrigger>
-          <TabsTrigger value="overdue">Vencidas ({overdueTasks.length})</TabsTrigger>
-          <TabsTrigger value="upcoming">Próximas ({upcomingTasks.length})</TabsTrigger>
-        </TabsList>
+      {/* Tasks List */}
+      <div className="space-y-4">
+        {filteredTasks.length === 0 ? (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <Circle className="h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold mb-2">No hay tareas</h3>
+              <p className="text-muted-foreground text-center">
+                No se encontraron tareas que coincidan con los filtros seleccionados.
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid gap-4">
+            {filteredTasks.map((task) => {
+              const event = events.find((e) => e.id === task.eventId)
+              const isTaskOverdue = isOverdue(task)
 
-        <TabsContent value="all" className="space-y-4">
-          {filteredTasks.length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <Circle className="h-12 w-12 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No hay tareas</h3>
-                <p className="text-muted-foreground text-center">
-                  No se encontraron tareas que coincidan con los filtros seleccionados.
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid gap-4">
-              {filteredTasks.map((task) => {
-                const event = events.find((e) => e.id === task.eventId)
-                const dueDate = DateTime.fromISO(task.dueDate)
-                const isTaskOverdue = isOverdue(task)
-
-                return (
-                  <Card key={task.id} className={`${isTaskOverdue ? "border-red-200 bg-red-50" : ""}`}>
-                    <CardHeader>
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-start gap-3">
-                          {getStatusIcon(task.status)}
-                          <div className="flex-1">
-                            <CardTitle className="text-lg">{task.title}</CardTitle>
-                            <CardDescription className="mt-1">{task.description}</CardDescription>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge className={getPriorityColor(task.priority)}>{task.priority}</Badge>
-                          <Badge variant="outline">{task.isAutomated ? "Automática" : "Manual"}</Badge>
+              return (
+                <Card key={task.id} className={`${isTaskOverdue ? "border-red-200 bg-red-50" : ""}`}>
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-start gap-3">
+                        {getStatusIcon(task.status)}
+                        <div className="flex-1">
+                          <CardTitle className="text-lg">{task.title}</CardTitle>
+                          <CardDescription className="mt-1">{task.description}</CardDescription>
                         </div>
                       </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                      <div className="flex items-center gap-2">
+                        <Badge className={getPriorityColor(task.priority)}>{task.priority}</Badge>
+                        <Badge variant="outline">{task.isAutomated ? "Automática" : "Manual"}</Badge>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Calendar className="h-4 w-4" />
+                        <span>
+                          Vence: {formatDate(task.dueDate)}
+                          {isTaskOverdue && <span className="text-red-600 ml-1">(Vencida)</span>}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Clock className="h-4 w-4" />
+                        <span>{task.estimatedHours || 1}h estimadas</span>
+                      </div>
+                      {task.assignee && (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Calendar className="h-4 w-4" />
-                          <span>
-                            Vence: {dueDate.toFormat("dd/MM/yyyy")}
-                            {isTaskOverdue && <span className="text-red-600 ml-1">(Vencida)</span>}
-                          </span>
+                          <User className="h-4 w-4" />
+                          <span>{task.assignee}</span>
                         </div>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Clock className="h-4 w-4" />
-                          <span>{task.estimatedHours}h estimadas</span>
-                        </div>
-                        {task.assignee && (
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <User className="h-4 w-4" />
-                            <span>{task.assignee}</span>
-                          </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary">{task.category}</Badge>
+                        {event && <Badge variant="outline">{event.title}</Badge>}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {task.status !== "completed" && (
+                          <>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleStatusUpdate(task.id, "in-progress")}
+                              disabled={task.status === "in-progress"}
+                            >
+                              En Progreso
+                            </Button>
+                            <Button size="sm" onClick={() => handleStatusUpdate(task.id, "completed")}>
+                              Completar
+                            </Button>
+                          </>
+                        )}
+                        {task.status === "completed" && (
+                          <Button size="sm" variant="outline" onClick={() => handleStatusUpdate(task.id, "pending")}>
+                            Reabrir
+                          </Button>
                         )}
                       </div>
-
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Badge variant="secondary">{task.category}</Badge>
-                          {event && <Badge variant="outline">{event.title}</Badge>}
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          {task.status !== "completed" && (
-                            <>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleStatusUpdate(task.id, "in-progress")}
-                                disabled={task.status === "in-progress"}
-                              >
-                                En Progreso
-                              </Button>
-                              <Button size="sm" onClick={() => handleStatusUpdate(task.id, "completed")}>
-                                Completar
-                              </Button>
-                            </>
-                          )}
-                          {task.status === "completed" && (
-                            <Button size="sm" variant="outline" onClick={() => handleStatusUpdate(task.id, "pending")}>
-                              Reabrir
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )
-              })}
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="overdue" className="space-y-4">
-          {overdueTasks.length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <CheckCircle className="h-12 w-12 text-green-500 mb-4" />
-                <h3 className="text-lg font-semibold mb-2">¡Excelente!</h3>
-                <p className="text-muted-foreground text-center">No tienes tareas vencidas en este momento.</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid gap-4">
-              {overdueTasks.map((task) => {
-                const event = events.find((e) => e.id === task.eventId)
-                const dueDate = DateTime.fromISO(task.dueDate)
-
-                return (
-                  <Card key={task.id} className="border-red-200 bg-red-50">
-                    <CardHeader>
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-start gap-3">
-                          <AlertCircle className="h-5 w-5 text-red-500 mt-0.5" />
-                          <div>
-                            <CardTitle className="text-lg text-red-900">{task.title}</CardTitle>
-                            <CardDescription className="text-red-700">{task.description}</CardDescription>
-                          </div>
-                        </div>
-                        <Badge className="bg-red-100 text-red-800 border-red-200">Vencida</Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4 text-sm">
-                          <span className="text-red-600">Venció: {dueDate.toFormat("dd/MM/yyyy")}</span>
-                          {event && <Badge variant="outline">{event.title}</Badge>}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleStatusUpdate(task.id, "in-progress")}
-                          >
-                            Iniciar
-                          </Button>
-                          <Button size="sm" onClick={() => handleStatusUpdate(task.id, "completed")}>
-                            Completar
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )
-              })}
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="upcoming" className="space-y-4">
-          {upcomingTasks.length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-12">
-                <Calendar className="h-12 w-12 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold mb-2">Sin tareas próximas</h3>
-                <p className="text-muted-foreground text-center">
-                  No tienes tareas programadas para los próximos 7 días.
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid gap-4">
-              {upcomingTasks.map((task) => {
-                const event = events.find((e) => e.id === task.eventId)
-                const dueDate = DateTime.fromISO(task.dueDate)
-                const daysUntilDue = Math.ceil(dueDate.diff(DateTime.now(), "days").days)
-
-                return (
-                  <Card key={task.id}>
-                    <CardHeader>
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-start gap-3">
-                          <Clock className="h-5 w-5 text-blue-500 mt-0.5" />
-                          <div>
-                            <CardTitle className="text-lg">{task.title}</CardTitle>
-                            <CardDescription>{task.description}</CardDescription>
-                          </div>
-                        </div>
-                        <Badge variant="secondary">{daysUntilDue === 0 ? "Hoy" : `${daysUntilDue} días`}</Badge>
-                      </div>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                          <span>Vence: {dueDate.toFormat("dd/MM/yyyy")}</span>
-                          {event && <Badge variant="outline">{event.title}</Badge>}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleStatusUpdate(task.id, "in-progress")}
-                            disabled={task.status === "in-progress"}
-                          >
-                            Iniciar
-                          </Button>
-                          <Button size="sm" onClick={() => handleStatusUpdate(task.id, "completed")}>
-                            Completar
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )
-              })}
-            </div>
-          )}
-        </TabsContent>
-      </Tabs>
+                    </div>
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
+        )}
+      </div>
 
       {/* New Task Form Modal */}
       {showNewTaskForm && (

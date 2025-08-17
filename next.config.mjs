@@ -3,10 +3,11 @@ const nextConfig = {
   experimental: {
     serverComponentsExternalPackages: ['luxon']
   },
-  transpilePackages: ['luxon'],
+  transpilePackages: ['lucide-react'],
   webpack: (config) => {
     config.resolve.alias = {
       ...config.resolve.alias,
+      '@': new URL('./', import.meta.url).pathname
     }
     return config
   },

@@ -1,21 +1,19 @@
 import { DateTime } from "luxon"
 
-export interface AutomatedTask {
+export interface Task {
   id: string
   title: string
   description: string
-  category: string
-  priority: "low" | "medium" | "high" | "urgent"
   status: "pending" | "in-progress" | "completed" | "cancelled"
-  dueDate: string
-  estimatedHours: number
+  priority: "low" | "medium" | "high" | "urgent"
   assignee?: string
-  dependencies?: string[]
-  isAutomated: boolean
-  eventId: string
+  dueDate: string
+  category: string
+  eventId?: string
+  isAutomated?: boolean
   createdAt: string
   updatedAt: string
-  type: "automated" | "manual"
+  estimatedHours?: number
   tags?: string[]
 }
 
@@ -27,7 +25,6 @@ export interface TaskTemplate {
   priority: "low" | "medium" | "high" | "urgent"
   daysBeforeEvent: number
   estimatedHours: number
-  dependencies?: string[]
   conditions?: {
     minAttendees?: number
     maxAttendees?: number
@@ -48,9 +45,8 @@ export interface TaskStats {
   byPriority: Record<string, number>
 }
 
-// Standard task templates organized by category
+// Standard task templates
 const TASK_TEMPLATES: TaskTemplate[] = [
-  // Venue Management
   {
     id: "venue-booking",
     title: "Confirmar reserva del venue",
@@ -63,29 +59,25 @@ const TASK_TEMPLATES: TaskTemplate[] = [
     tags: ["venue", "booking"],
   },
   {
-    id: "venue-visit",
-    title: "Visita técnica al venue",
-    description: "Realizar visita técnica para evaluar instalaciones y requerimientos",
-    category: "Venue Management",
-    priority: "medium",
-    daysBeforeEvent: 45,
-    estimatedHours: 3,
-    dependencies: ["venue-booking"],
-    tags: ["venue", "technical"],
-  },
-  {
-    id: "venue-contract",
-    title: "Firmar contrato del venue",
-    description: "Revisar y firmar el contrato de alquiler del venue",
+    id: "venue-setup",
+    title: "Coordinar montaje del venue",
+    description: "Planificar y coordinar el setup del venue incluyendo decoración y equipamiento",
     category: "Venue Management",
     priority: "high",
-    daysBeforeEvent: 50,
-    estimatedHours: 1,
-    dependencies: ["venue-booking"],
-    tags: ["venue", "contract"],
+    daysBeforeEvent: 7,
+    estimatedHours: 4,
+    tags: ["venue", "setup"],
   },
-
-  // Technical Production
+  {
+    id: "venue-cleanup",
+    title: "Organizar limpieza post-evento",
+    description: "Coordinar la limpieza y desmontaje del venue después del evento",
+    category: "Venue Management",
+    priority: "medium",
+    daysBeforeEvent: -1,
+    estimatedHours: 3,
+    tags: ["venue", "cleanup"],
+  },
   {
     id: "sound-equipment",
     title: "Contratar equipo de sonido",
@@ -117,8 +109,6 @@ const TASK_TEMPLATES: TaskTemplate[] = [
     estimatedHours: 2,
     tags: ["av", "equipment"],
   },
-
-  // Catering & Logistics
   {
     id: "catering-menu",
     title: "Definir menú de catering",
@@ -138,7 +128,6 @@ const TASK_TEMPLATES: TaskTemplate[] = [
     priority: "high",
     daysBeforeEvent: 14,
     estimatedHours: 1,
-    dependencies: ["catering-menu"],
     tags: ["catering", "contract"],
   },
   {
@@ -152,8 +141,6 @@ const TASK_TEMPLATES: TaskTemplate[] = [
     conditions: { minAttendees: 100 },
     tags: ["transport", "logistics"],
   },
-
-  // Security & Safety
   {
     id: "security-plan",
     title: "Plan de seguridad",
@@ -185,8 +172,6 @@ const TASK_TEMPLATES: TaskTemplate[] = [
     estimatedHours: 4,
     tags: ["permits", "legal"],
   },
-
-  // Marketing & Promotion
   {
     id: "marketing-strategy",
     title: "Estrategia de marketing",
@@ -205,7 +190,6 @@ const TASK_TEMPLATES: TaskTemplate[] = [
     priority: "medium",
     daysBeforeEvent: 30,
     estimatedHours: 6,
-    dependencies: ["marketing-strategy"],
     tags: ["social-media", "promotion"],
   },
   {
@@ -218,8 +202,6 @@ const TASK_TEMPLATES: TaskTemplate[] = [
     estimatedHours: 2,
     tags: ["press", "media"],
   },
-
-  // Financial Management
   {
     id: "budget-approval",
     title: "Aprobación de presupuesto",
@@ -250,8 +232,6 @@ const TASK_TEMPLATES: TaskTemplate[] = [
     estimatedHours: 2,
     tags: ["tracking", "finance"],
   },
-
-  // Artistic Direction
   {
     id: "artistic-concept",
     title: "Concepto artístico",
@@ -272,7 +252,6 @@ const TASK_TEMPLATES: TaskTemplate[] = [
     daysBeforeEvent: 60,
     estimatedHours: 6,
     conditions: { eventTypes: ["cultural", "artistic", "entertainment"] },
-    dependencies: ["artistic-concept"],
     tags: ["performers", "booking"],
   },
   {
@@ -284,11 +263,8 @@ const TASK_TEMPLATES: TaskTemplate[] = [
     daysBeforeEvent: 14,
     estimatedHours: 3,
     conditions: { eventTypes: ["cultural", "artistic", "entertainment"] },
-    dependencies: ["performer-booking"],
     tags: ["rehearsal", "schedule"],
   },
-
-  // International Support
   {
     id: "visa-requirements",
     title: "Requisitos de visa",
@@ -339,22 +315,7 @@ const TASK_TEMPLATES: TaskTemplate[] = [
 function isInternationalEvent(event: any): boolean {
   if (!event) return false
 
-  // Check if venue location suggests international event
-  const venue = event.venue
-  if (venue && typeof venue === "object" && venue.location) {
-    const location = venue.location.toLowerCase()
-    // Check for international indicators
-    if (
-      location.includes("international") ||
-      location.includes("embassy") ||
-      location.includes("consulate") ||
-      location.includes("airport")
-    ) {
-      return true
-    }
-  }
-
-  // Check event title/description for international keywords
+  const venue = event.venue || ""
   const title = event.title?.toLowerCase() || ""
   const description = event.description?.toLowerCase() || ""
 
@@ -368,108 +329,239 @@ function isInternationalEvent(event: any): boolean {
     "overseas",
     "cross-border",
     "multinational",
+    "usa",
+    "europe",
+    "uk",
+    "spain",
+    "france",
+    "germany",
+    "italy",
+    "brazil",
+    "chile",
+    "colombia",
+    "mexico",
+    "miami",
+    "new york",
+    "london",
+    "madrid",
+    "barcelona",
+    "paris",
+    "berlin",
+    "rome",
+    "são paulo",
+    "santiago",
+    "bogotá",
+    "mexico city",
   ]
 
-  return internationalKeywords.some((keyword) => title.includes(keyword) || description.includes(keyword))
+  return internationalKeywords.some(
+    (keyword) => venue.toLowerCase().includes(keyword) || title.includes(keyword) || description.includes(keyword),
+  )
+}
+
+// Calculate days until event - MISSING EXPORT ADDED
+export function calculateDaysUntilEvent(eventDate: string): number {
+  try {
+    const event = DateTime.fromISO(eventDate).setZone("America/Argentina/Buenos_Aires")
+    const now = DateTime.now().setZone("America/Argentina/Buenos_Aires")
+    return Math.ceil(event.diff(now, "days").days)
+  } catch (error) {
+    console.error("Error calculating days until event:", error)
+    return 0
+  }
+}
+
+// Check if event requires customs handling
+export function requiresCustoms(venue: string): boolean {
+  if (!venue) return false
+
+  const internationalKeywords = [
+    "usa",
+    "europe",
+    "uk",
+    "spain",
+    "france",
+    "germany",
+    "italy",
+    "brazil",
+    "chile",
+    "colombia",
+    "mexico",
+    "miami",
+    "new york",
+    "london",
+    "madrid",
+    "barcelona",
+    "paris",
+    "berlin",
+    "rome",
+    "são paulo",
+    "santiago",
+    "bogotá",
+    "mexico city",
+    "international",
+    "world",
+    "global",
+  ]
+
+  return internationalKeywords.some((keyword) => venue.toLowerCase().includes(keyword))
+}
+
+// Get country from venue name
+export function getCountryFromVenue(venue: string): string {
+  if (!venue) return "Argentina"
+
+  const countryMap: Record<string, string> = {
+    usa: "Estados Unidos",
+    miami: "Estados Unidos",
+    "new york": "Estados Unidos",
+    europe: "Europa",
+    uk: "Reino Unido",
+    london: "Reino Unido",
+    spain: "España",
+    madrid: "España",
+    barcelona: "España",
+    france: "Francia",
+    paris: "Francia",
+    germany: "Alemania",
+    berlin: "Alemania",
+    italy: "Italia",
+    rome: "Italia",
+    brazil: "Brasil",
+    "são paulo": "Brasil",
+    chile: "Chile",
+    santiago: "Chile",
+    colombia: "Colombia",
+    bogotá: "Colombia",
+    mexico: "México",
+    "mexico city": "México",
+  }
+
+  const venueLower = venue.toLowerCase()
+  for (const [keyword, country] of Object.entries(countryMap)) {
+    if (venueLower.includes(keyword)) {
+      return country
+    }
+  }
+
+  return "Argentina"
 }
 
 // Generate automated tasks based on event parameters
-export function generateAutomatedTasks(event: any): AutomatedTask[] {
+export function generateAutomatedTasks(event: any): Task[] {
   if (!event || !event.date) {
     return []
   }
 
-  const eventDate = DateTime.fromISO(event.date).setZone("America/Argentina/Buenos_Aires")
-  const now = DateTime.now().setZone("America/Argentina/Buenos_Aires")
-  const isInternational = isInternationalEvent(event)
-  const attendees = event.attendees || 0
-  const eventType = event.type?.toLowerCase() || "general"
+  try {
+    const eventDate = DateTime.fromISO(event.date).setZone("America/Argentina/Buenos_Aires")
+    const now = DateTime.now().setZone("America/Argentina/Buenos_Aires")
+    const isInternational = isInternationalEvent(event)
+    const attendees = event.attendees || 0
+    const eventType = event.type?.toLowerCase() || "general"
 
-  const applicableTasks = TASK_TEMPLATES.filter((template) => {
-    // Check conditions
-    if (template.conditions) {
-      const conditions = template.conditions
+    const applicableTasks = TASK_TEMPLATES.filter((template) => {
+      if (template.conditions) {
+        const conditions = template.conditions
 
-      if (conditions.minAttendees && attendees < conditions.minAttendees) return false
-      if (conditions.maxAttendees && attendees > conditions.maxAttendees) return false
-      if (conditions.international && !isInternational) return false
-      if (conditions.venueRequired && !event.venue) return false
-      if (conditions.eventTypes && !conditions.eventTypes.includes(eventType)) return false
-    }
+        if (conditions.minAttendees && attendees < conditions.minAttendees) return false
+        if (conditions.maxAttendees && attendees > conditions.maxAttendees) return false
+        if (conditions.international && !isInternational) return false
+        if (conditions.venueRequired && !event.venue) return false
+        if (conditions.eventTypes && !conditions.eventTypes.includes(eventType)) return false
+      }
 
-    return true
-  })
+      return true
+    })
 
-  return applicableTasks.map((template) => {
-    const dueDate = eventDate.minus({ days: template.daysBeforeEvent })
-    const taskId = `${event.id}-${template.id}-${Date.now()}`
+    return applicableTasks.map((template) => {
+      const dueDate = eventDate.minus({ days: template.daysBeforeEvent })
+      const taskId = `${event.id}-${template.id}-${Date.now()}`
 
-    return {
-      id: taskId,
-      title: template.title,
-      description: template.description,
-      category: template.category,
-      priority: template.priority,
-      status: "pending" as const,
-      dueDate: dueDate.toISO() || "",
-      estimatedHours: template.estimatedHours,
-      dependencies: template.dependencies,
-      isAutomated: true,
-      eventId: event.id,
-      createdAt: now.toISO() || "",
-      updatedAt: now.toISO() || "",
-      type: "automated" as const,
-      tags: template.tags,
-    }
-  })
+      return {
+        id: taskId,
+        title: template.title,
+        description: template.description,
+        category: template.category,
+        priority: template.priority,
+        status: "pending" as const,
+        dueDate: dueDate.toISO() || "",
+        estimatedHours: template.estimatedHours,
+        isAutomated: true,
+        eventId: event.id,
+        createdAt: now.toISO() || "",
+        updatedAt: now.toISO() || "",
+        tags: template.tags,
+      }
+    })
+  } catch (error) {
+    console.error("Error generating automated tasks:", error)
+    return []
+  }
 }
 
 // Get task statistics
-export function getAutomatedTasksStats(tasks: AutomatedTask[]): TaskStats {
-  const now = DateTime.now().setZone("America/Argentina/Buenos_Aires")
+export function getAutomatedTasksStats(tasks: Task[]): TaskStats {
+  try {
+    const now = DateTime.now().setZone("America/Argentina/Buenos_Aires")
 
-  const stats: TaskStats = {
-    total: tasks.length,
-    completed: 0,
-    pending: 0,
-    inProgress: 0,
-    overdue: 0,
-    byCategory: {},
-    byPriority: {},
-  }
-
-  tasks.forEach((task) => {
-    // Count by status
-    if (task.status === "completed") stats.completed++
-    else if (task.status === "in-progress") stats.inProgress++
-    else if (task.status === "pending") stats.pending++
-
-    // Check if overdue
-    const dueDate = DateTime.fromISO(task.dueDate)
-    if (task.status !== "completed" && dueDate < now) {
-      stats.overdue++
+    const stats: TaskStats = {
+      total: tasks.length,
+      completed: 0,
+      pending: 0,
+      inProgress: 0,
+      overdue: 0,
+      byCategory: {},
+      byPriority: {},
     }
 
-    // Count by category
-    stats.byCategory[task.category] = (stats.byCategory[task.category] || 0) + 1
+    tasks.forEach((task) => {
+      // Count by status
+      if (task.status === "completed") stats.completed++
+      else if (task.status === "in-progress") stats.inProgress++
+      else if (task.status === "pending") stats.pending++
 
-    // Count by priority
-    stats.byPriority[task.priority] = (stats.byPriority[task.priority] || 0) + 1
-  })
+      // Check if overdue
+      try {
+        const dueDate = DateTime.fromISO(task.dueDate)
+        if (task.status !== "completed" && dueDate < now) {
+          stats.overdue++
+        }
+      } catch (error) {
+        console.error("Error parsing due date:", error)
+      }
 
-  return stats
+      // Count by category
+      stats.byCategory[task.category] = (stats.byCategory[task.category] || 0) + 1
+
+      // Count by priority
+      stats.byPriority[task.priority] = (stats.byPriority[task.priority] || 0) + 1
+    })
+
+    return stats
+  } catch (error) {
+    console.error("Error calculating stats:", error)
+    return {
+      total: 0,
+      completed: 0,
+      pending: 0,
+      inProgress: 0,
+      overdue: 0,
+      byCategory: {},
+      byPriority: {},
+    }
+  }
 }
 
 // Process automated tasks (placeholder function)
-export function processAutomatedTasks(eventId: string): void {
-  console.log(`Processing automated tasks for event: ${eventId}`)
+export function processAutomatedTasks(): void {
+  console.log("Processing automated tasks...")
   // This function can be expanded to handle automated task processing
-  // For now, it's a placeholder to prevent import errors
 }
 
 // Filter tasks by various criteria
 export function filterTasks(
-  tasks: AutomatedTask[],
+  tasks: Task[],
   filters: {
     status?: string
     priority?: string
@@ -478,57 +570,124 @@ export function filterTasks(
     assignee?: string
     type?: string
   },
-): AutomatedTask[] {
-  return tasks.filter((task) => {
-    if (filters.status && task.status !== filters.status) return false
-    if (filters.priority && task.priority !== filters.priority) return false
-    if (filters.category && task.category !== filters.category) return false
-    if (filters.assignee && task.assignee !== filters.assignee) return false
-    if (filters.type && task.type !== filters.type) return false
+): Task[] {
+  try {
+    return tasks.filter((task) => {
+      if (filters.status && task.status !== filters.status) return false
+      if (filters.priority && task.priority !== filters.priority) return false
+      if (filters.category && task.category !== filters.category) return false
+      if (filters.assignee && task.assignee !== filters.assignee) return false
 
-    if (filters.search) {
-      const searchLower = filters.search.toLowerCase()
-      const searchableText = `${task.title} ${task.description} ${task.category}`.toLowerCase()
-      if (!searchableText.includes(searchLower)) return false
-    }
+      if (filters.search) {
+        const searchLower = filters.search.toLowerCase()
+        const searchableText = `${task.title} ${task.description} ${task.category}`.toLowerCase()
+        if (!searchableText.includes(searchLower)) return false
+      }
 
-    return true
-  })
+      return true
+    })
+  } catch (error) {
+    console.error("Error filtering tasks:", error)
+    return []
+  }
 }
 
 // Get tasks by category
-export function getTasksByCategory(tasks: AutomatedTask[]): Record<string, AutomatedTask[]> {
-  return tasks.reduce(
-    (acc, task) => {
-      if (!acc[task.category]) {
-        acc[task.category] = []
-      }
-      acc[task.category].push(task)
-      return acc
-    },
-    {} as Record<string, AutomatedTask[]>,
-  )
+export function getTasksByCategory(tasks: Task[]): Record<string, Task[]> {
+  try {
+    return tasks.reduce(
+      (acc, task) => {
+        if (!acc[task.category]) {
+          acc[task.category] = []
+        }
+        acc[task.category].push(task)
+        return acc
+      },
+      {} as Record<string, Task[]>,
+    )
+  } catch (error) {
+    console.error("Error grouping tasks by category:", error)
+    return {}
+  }
 }
 
 // Get overdue tasks
-export function getOverdueTasks(tasks: AutomatedTask[]): AutomatedTask[] {
-  const now = DateTime.now().setZone("America/Argentina/Buenos_Aires")
+export function getOverdueTasks(tasks: Task[]): Task[] {
+  try {
+    const now = DateTime.now().setZone("America/Argentina/Buenos_Aires")
 
-  return tasks.filter((task) => {
-    if (task.status === "completed") return false
-    const dueDate = DateTime.fromISO(task.dueDate)
-    return dueDate < now
-  })
+    return tasks.filter((task) => {
+      if (task.status === "completed") return false
+      try {
+        const dueDate = DateTime.fromISO(task.dueDate)
+        return dueDate < now
+      } catch (error) {
+        console.error("Error parsing due date:", error)
+        return false
+      }
+    })
+  } catch (error) {
+    console.error("Error getting overdue tasks:", error)
+    return []
+  }
 }
 
 // Get upcoming tasks (due within next 7 days)
-export function getUpcomingTasks(tasks: AutomatedTask[], days = 7): AutomatedTask[] {
-  const now = DateTime.now().setZone("America/Argentina/Buenos_Aires")
-  const futureDate = now.plus({ days })
+export function getUpcomingTasks(tasks: Task[], days = 7): Task[] {
+  try {
+    const now = DateTime.now().setZone("America/Argentina/Buenos_Aires")
+    const futureDate = now.plus({ days })
 
-  return tasks.filter((task) => {
-    if (task.status === "completed") return false
-    const dueDate = DateTime.fromISO(task.dueDate)
-    return dueDate >= now && dueDate <= futureDate
-  })
+    return tasks.filter((task) => {
+      if (task.status === "completed") return false
+      try {
+        const dueDate = DateTime.fromISO(task.dueDate)
+        return dueDate >= now && dueDate <= futureDate
+      } catch (error) {
+        console.error("Error parsing due date:", error)
+        return false
+      }
+    })
+  } catch (error) {
+    console.error("Error getting upcoming tasks:", error)
+    return []
+  }
+}
+
+// Get urgent automated events that need attention
+export function getUrgentAutomatedEvents(events: any[], tasks: Task[]): any[] {
+  try {
+    const now = DateTime.now().setZone("America/Argentina/Buenos_Aires")
+
+    return events
+      .filter((event) => {
+        try {
+          const eventDate = DateTime.fromISO(event.date).setZone("America/Argentina/Buenos_Aires")
+          const daysUntilEvent = eventDate.diff(now, "days").days
+          return daysUntilEvent > 0 && daysUntilEvent <= 30
+        } catch (error) {
+          console.error("Error parsing event date:", error)
+          return false
+        }
+      })
+      .map((event) => {
+        const eventTasks = tasks.filter((task) => task.eventId === event.id && task.isAutomated)
+        const pendingTasks = eventTasks.filter((task) => task.status === "pending").length
+        const daysUntilEvent = calculateDaysUntilEvent(event.date)
+
+        return {
+          id: event.id,
+          venue: event.venue,
+          country: getCountryFromVenue(event.venue || ""),
+          daysUntilEvent,
+          pendingTasks,
+          requiresAttention: pendingTasks > 0 && daysUntilEvent <= 14,
+        }
+      })
+      .filter((event) => event.requiresAttention)
+      .sort((a, b) => a.daysUntilEvent - b.daysUntilEvent)
+  } catch (error) {
+    console.error("Error getting urgent automated events:", error)
+    return []
+  }
 }
