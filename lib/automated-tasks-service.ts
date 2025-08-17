@@ -1,30 +1,38 @@
 import { DateTime } from "luxon"
 
-export interface AutomatedTask {
+export interface Task {
+  id: string
+  title: string
+  description: string
+  status: "pending" | "in-progress" | "completed" | "cancelled"
+  priority: "low" | "medium" | "high" | "urgent"
+  assignee?: string
+  dueDate: string
+  category: string
+  eventId?: string
+  isAutomated?: boolean
+  createdAt: string
+  updatedAt: string
+  estimatedHours?: number
+  tags?: string[]
+}
+
+export interface TaskTemplate {
   id: string
   title: string
   description: string
   category: string
   priority: "low" | "medium" | "high" | "urgent"
-  dueDate: string
-  status: "pending" | "in-progress" | "completed"
-  assignee?: string
-  eventId: string
-  createdAt: string
-  updatedAt: string
-  type: "automated" | "manual"
-  estimatedHours?: number
-  dependencies?: string[]
-}
-
-export interface TaskTemplate {
-  title: string
-  description: string
-  category: string
-  priority: "low" | "medium" | "high" | "urgent"
   daysBeforeEvent: number
-  estimatedHours?: number
-  condition?: (event: any) => boolean
+  estimatedHours: number
+  conditions?: {
+    minAttendees?: number
+    maxAttendees?: number
+    eventTypes?: string[]
+    international?: boolean
+    venueRequired?: boolean
+  }
+  tags?: string[]
 }
 
 export interface TaskStats {
@@ -35,226 +43,410 @@ export interface TaskStats {
   overdue: number
   byCategory: Record<string, number>
   byPriority: Record<string, number>
+  completionPercentage: number
 }
 
+// Standard task templates organized by category
 const TASK_TEMPLATES: TaskTemplate[] = [
   // Venue Management
   {
-    title: "Confirmar disponibilidad del venue",
-    description: "Verificar que el venue esté disponible en la fecha seleccionada",
-    category: "Venue Management",
-    priority: "high",
-    daysBeforeEvent: 90,
-    estimatedHours: 2,
-  },
-  {
-    title: "Inspección técnica del venue",
-    description: "Realizar inspección técnica de instalaciones, capacidad eléctrica y acústica",
+    id: "venue-booking",
+    title: "Confirmar reserva del venue",
+    description: "Confirmar la disponibilidad y reserva del venue para la fecha del evento",
     category: "Venue Management",
     priority: "high",
     daysBeforeEvent: 60,
-    estimatedHours: 4,
+    estimatedHours: 2,
+    conditions: { venueRequired: true },
+    tags: ["venue", "booking"],
   },
   {
-    title: "Firmar contrato del venue",
-    description: "Finalizar y firmar el contrato de alquiler del venue",
+    id: "venue-visit",
+    title: "Visita técnica al venue",
+    description: "Realizar visita técnica para evaluar instalaciones y requerimientos",
     category: "Venue Management",
-    priority: "urgent",
-    daysBeforeEvent: 75,
+    priority: "medium",
+    daysBeforeEvent: 45,
     estimatedHours: 3,
+    tags: ["venue", "technical"],
+  },
+  {
+    id: "venue-contract",
+    title: "Firmar contrato del venue",
+    description: "Revisar y firmar el contrato de alquiler del venue",
+    category: "Venue Management",
+    priority: "high",
+    daysBeforeEvent: 50,
+    estimatedHours: 1,
+    tags: ["venue", "contract"],
+  },
+  {
+    id: "venue-setup",
+    title: "Coordinar montaje del venue",
+    description: "Planificar y coordinar el setup del venue incluyendo decoración",
+    category: "Venue Management",
+    priority: "high",
+    daysBeforeEvent: 3,
+    estimatedHours: 4,
+    tags: ["venue", "setup"],
   },
 
   // Technical Production
   {
-    title: "Planificar setup técnico",
-    description: "Definir requerimientos de sonido, iluminación y escenografía",
-    category: "Technical Production",
-    priority: "high",
-    daysBeforeEvent: 45,
-    estimatedHours: 6,
-  },
-  {
-    title: "Contratar equipo técnico",
-    description: "Reservar y contratar equipos de sonido, iluminación y video",
+    id: "sound-equipment",
+    title: "Contratar equipo de sonido",
+    description: "Coordinar el alquiler y setup del equipo de sonido profesional",
     category: "Technical Production",
     priority: "high",
     daysBeforeEvent: 30,
     estimatedHours: 4,
+    conditions: { minAttendees: 50 },
+    tags: ["audio", "equipment"],
   },
   {
+    id: "lighting-setup",
+    title: "Diseño de iluminación",
+    description: "Planificar y coordinar el setup de iluminación del evento",
+    category: "Technical Production",
+    priority: "medium",
+    daysBeforeEvent: 25,
+    estimatedHours: 3,
+    tags: ["lighting", "design"],
+  },
+  {
+    id: "av-equipment",
+    title: "Equipo audiovisual",
+    description: "Coordinar proyectores, pantallas y equipo AV necesario",
+    category: "Technical Production",
+    priority: "medium",
+    daysBeforeEvent: 20,
+    estimatedHours: 2,
+    tags: ["av", "equipment"],
+  },
+  {
+    id: "sound-check",
     title: "Prueba de sonido",
     description: "Realizar prueba de sonido y ajustes técnicos finales",
     category: "Technical Production",
     priority: "urgent",
     daysBeforeEvent: 1,
     estimatedHours: 3,
+    tags: ["audio", "testing"],
   },
 
   // Catering & Logistics
   {
-    title: "Seleccionar servicio de catering",
-    description: "Elegir y contratar servicio de catering según el número de asistentes",
+    id: "catering-menu",
+    title: "Definir menú de catering",
+    description: "Seleccionar y confirmar el menú con el proveedor de catering",
     category: "Catering & Logistics",
     priority: "medium",
-    daysBeforeEvent: 30,
-    estimatedHours: 3,
-    condition: (event) => event.attendees > 50,
-  },
-  {
-    title: "Coordinar logística de transporte",
-    description: "Organizar transporte para artistas y equipo técnico",
-    category: "Catering & Logistics",
-    priority: "medium",
-    daysBeforeEvent: 15,
+    daysBeforeEvent: 21,
     estimatedHours: 2,
+    conditions: { minAttendees: 20 },
+    tags: ["catering", "menu"],
   },
   {
-    title: "Preparar backstage",
-    description: "Acondicionar área de backstage con catering y necesidades de artistas",
+    id: "catering-contract",
+    title: "Contrato de catering",
+    description: "Firmar contrato con proveedor de catering seleccionado",
+    category: "Catering & Logistics",
+    priority: "high",
+    daysBeforeEvent: 14,
+    estimatedHours: 1,
+    tags: ["catering", "contract"],
+  },
+  {
+    id: "transportation",
+    title: "Coordinar transporte",
+    description: "Organizar transporte para participantes si es necesario",
+    category: "Catering & Logistics",
+    priority: "low",
+    daysBeforeEvent: 10,
+    estimatedHours: 2,
+    conditions: { minAttendees: 100 },
+    tags: ["transport", "logistics"],
+  },
+  {
+    id: "backstage-setup",
+    title: "Preparar área de backstage",
+    description: "Acondicionar área de backstage con catering y necesidades",
     category: "Catering & Logistics",
     priority: "medium",
     daysBeforeEvent: 1,
     estimatedHours: 2,
+    tags: ["backstage", "setup"],
   },
 
   // Security & Safety
   {
-    title: "Contratar seguridad",
+    id: "security-plan",
+    title: "Plan de seguridad",
+    description: "Desarrollar plan de seguridad y evacuación para el evento",
+    category: "Security & Safety",
+    priority: "high",
+    daysBeforeEvent: 30,
+    estimatedHours: 3,
+    conditions: { minAttendees: 100 },
+    tags: ["security", "safety"],
+  },
+  {
+    id: "security-personnel",
+    title: "Contratar personal de seguridad",
     description: "Contratar personal de seguridad según el tamaño del evento",
     category: "Security & Safety",
     priority: "high",
     daysBeforeEvent: 21,
     estimatedHours: 2,
-    condition: (event) => event.attendees > 100,
+    conditions: { minAttendees: 100 },
+    tags: ["security", "personnel"],
   },
   {
-    title: "Plan de evacuación",
-    description: "Desarrollar y comunicar plan de evacuación de emergencia",
+    id: "insurance",
+    title: "Seguro del evento",
+    description: "Contratar seguro de responsabilidad civil para el evento",
     category: "Security & Safety",
     priority: "high",
-    daysBeforeEvent: 14,
-    estimatedHours: 3,
+    daysBeforeEvent: 45,
+    estimatedHours: 1,
+    tags: ["insurance", "legal"],
   },
   {
-    title: "Inspección de seguridad",
-    description: "Realizar inspección final de seguridad del venue",
+    id: "permits",
+    title: "Permisos municipales",
+    description: "Obtener todos los permisos necesarios de las autoridades locales",
     category: "Security & Safety",
-    priority: "urgent",
-    daysBeforeEvent: 1,
-    estimatedHours: 2,
+    priority: "high",
+    daysBeforeEvent: 60,
+    estimatedHours: 4,
+    tags: ["permits", "legal"],
   },
 
   // Marketing & Promotion
   {
-    title: "Crear material promocional",
-    description: "Diseñar flyers, posters y contenido para redes sociales",
+    id: "marketing-strategy",
+    title: "Estrategia de marketing",
+    description: "Desarrollar estrategia de promoción y marketing del evento",
+    category: "Marketing & Promotion",
+    priority: "medium",
+    daysBeforeEvent: 90,
+    estimatedHours: 4,
+    tags: ["marketing", "strategy"],
+  },
+  {
+    id: "promotional-material",
+    title: "Material promocional",
+    description: "Crear flyers, posters y contenido para redes sociales",
     category: "Marketing & Promotion",
     priority: "medium",
     daysBeforeEvent: 60,
-    estimatedHours: 8,
+    estimatedHours: 6,
+    tags: ["design", "promotion"],
   },
   {
-    title: "Lanzar campaña en redes sociales",
-    description: "Iniciar campaña promocional en redes sociales",
+    id: "social-media",
+    title: "Campaña en redes sociales",
+    description: "Lanzar campaña promocional en redes sociales",
     category: "Marketing & Promotion",
     priority: "medium",
-    daysBeforeEvent: 45,
+    daysBeforeEvent: 30,
     estimatedHours: 4,
+    tags: ["social-media", "promotion"],
   },
   {
-    title: "Contactar medios locales",
-    description: "Enviar comunicados de prensa a medios locales",
+    id: "press-release",
+    title: "Comunicado de prensa",
+    description: "Preparar y enviar comunicado de prensa a medios locales",
     category: "Marketing & Promotion",
     priority: "low",
-    daysBeforeEvent: 30,
-    estimatedHours: 3,
+    daysBeforeEvent: 21,
+    estimatedHours: 2,
+    tags: ["press", "media"],
   },
 
   // Financial Management
   {
-    title: "Preparar presupuesto detallado",
-    description: "Crear presupuesto completo con todos los costos del evento",
+    id: "budget-approval",
+    title: "Aprobación de presupuesto",
+    description: "Obtener aprobación final del presupuesto del evento",
     category: "Financial Management",
     priority: "high",
     daysBeforeEvent: 75,
-    estimatedHours: 4,
+    estimatedHours: 2,
+    tags: ["budget", "approval"],
   },
   {
-    title: "Configurar sistema de ticketing",
+    id: "ticketing-setup",
+    title: "Sistema de ticketing",
     description: "Configurar plataforma de venta de entradas",
     category: "Financial Management",
     priority: "high",
     daysBeforeEvent: 60,
     estimatedHours: 3,
+    tags: ["tickets", "sales"],
   },
   {
+    id: "vendor-payments",
+    title: "Cronograma de pagos",
+    description: "Establecer cronograma de pagos con todos los proveedores",
+    category: "Financial Management",
+    priority: "high",
+    daysBeforeEvent: 30,
+    estimatedHours: 3,
+    tags: ["payments", "vendors"],
+  },
+  {
+    id: "financial-reconciliation",
     title: "Reconciliación financiera",
     description: "Revisar y reconciliar todos los gastos del evento",
     category: "Financial Management",
     priority: "medium",
     daysBeforeEvent: -7,
     estimatedHours: 3,
+    tags: ["reconciliation", "finance"],
   },
 
   // Artistic Direction
   {
+    id: "artist-lineup",
     title: "Confirmar lineup de artistas",
     description: "Finalizar y confirmar todos los artistas participantes",
     category: "Artistic Direction",
     priority: "urgent",
     daysBeforeEvent: 45,
     estimatedHours: 2,
+    tags: ["artists", "lineup"],
   },
   {
-    title: "Coordinar ensayos",
+    id: "rehearsal-schedule",
+    title: "Cronograma de ensayos",
     description: "Programar y coordinar ensayos con todos los artistas",
     category: "Artistic Direction",
     priority: "high",
     daysBeforeEvent: 7,
     estimatedHours: 4,
+    tags: ["rehearsal", "schedule"],
   },
   {
+    id: "artist-briefing",
     title: "Briefing artístico final",
     description: "Reunión final con artistas para coordinar detalles del show",
     category: "Artistic Direction",
     priority: "high",
     daysBeforeEvent: 1,
     estimatedHours: 2,
+    tags: ["briefing", "artists"],
+  },
+  {
+    id: "stage-design",
+    title: "Diseño de escenario",
+    description: "Finalizar diseño y montaje del escenario",
+    category: "Artistic Direction",
+    priority: "medium",
+    daysBeforeEvent: 14,
+    estimatedHours: 6,
+    tags: ["stage", "design"],
   },
 
   // International Support
   {
-    title: "Gestionar documentación de visa",
-    description: "Tramitar visas necesarias para artistas internacionales",
+    id: "visa-requirements",
+    title: "Requisitos de visa",
+    description: "Verificar y asistir con requisitos de visa para participantes internacionales",
     category: "International Support",
     priority: "urgent",
     daysBeforeEvent: 90,
-    estimatedHours: 6,
-    condition: (event) => requiresCustoms(event),
+    estimatedHours: 4,
+    conditions: { international: true },
+    tags: ["visa", "international"],
   },
   {
-    title: "Coordinar trámites aduaneros",
-    description: "Gestionar permisos aduaneros para equipos internacionales",
+    id: "customs-documentation",
+    title: "Documentación aduanera",
+    description: "Preparar documentación necesaria para equipos internacionales",
     category: "International Support",
     priority: "high",
     daysBeforeEvent: 60,
-    estimatedHours: 4,
-    condition: (event) => requiresCustoms(event),
+    estimatedHours: 3,
+    conditions: { international: true },
+    tags: ["customs", "documentation"],
   },
   {
-    title: "Organizar alojamiento internacional",
-    description: "Reservar hoteles y coordinar traslados para artistas internacionales",
+    id: "international-transport",
+    title: "Transporte internacional",
+    description: "Coordinar vuelos y transporte para artistas internacionales",
+    category: "International Support",
+    priority: "high",
+    daysBeforeEvent: 30,
+    estimatedHours: 4,
+    conditions: { international: true },
+    tags: ["transport", "international"],
+  },
+  {
+    id: "accommodation-international",
+    title: "Alojamiento internacional",
+    description: "Coordinar alojamiento para participantes internacionales",
     category: "International Support",
     priority: "medium",
-    daysBeforeEvent: 30,
+    daysBeforeEvent: 45,
     estimatedHours: 3,
-    condition: (event) => requiresCustoms(event),
+    conditions: { international: true, minAttendees: 10 },
+    tags: ["accommodation", "international"],
   },
 ]
 
+// Helper function to check if an event is international
+function isInternationalEvent(event: any): boolean {
+  if (!event) return false
+
+  const venue = event.venue || ""
+  const title = event.title?.toLowerCase() || ""
+  const description = event.description?.toLowerCase() || ""
+
+  const internationalKeywords = [
+    "international",
+    "mundial",
+    "global",
+    "embassy",
+    "consulate",
+    "foreign",
+    "overseas",
+    "cross-border",
+    "multinational",
+    "usa",
+    "europe",
+    "uk",
+    "spain",
+    "france",
+    "germany",
+    "italy",
+    "brazil",
+    "chile",
+    "colombia",
+    "mexico",
+    "miami",
+    "new york",
+    "london",
+    "madrid",
+    "barcelona",
+    "paris",
+    "berlin",
+    "rome",
+    "são paulo",
+    "santiago",
+    "bogotá",
+    "mexico city",
+  ]
+
+  return internationalKeywords.some(
+    (keyword) => venue.toLowerCase().includes(keyword) || title.includes(keyword) || description.includes(keyword),
+  )
+}
+
+// Calculate days until event
 export function calculateDaysUntilEvent(eventDate: string): number {
   try {
-    const event = DateTime.fromISO(eventDate, { zone: "America/Argentina/Buenos_Aires" })
+    const event = DateTime.fromISO(eventDate).setZone("America/Argentina/Buenos_Aires")
     const now = DateTime.now().setZone("America/Argentina/Buenos_Aires")
     return Math.ceil(event.diff(now, "days").days)
   } catch (error) {
@@ -263,92 +455,81 @@ export function calculateDaysUntilEvent(eventDate: string): number {
   }
 }
 
+// Check if event requires customs handling
 export function requiresCustoms(event: any): boolean {
   if (!event) return false
 
-  try {
-    const venue = event.venue?.toLowerCase() || ""
-    const description = event.description?.toLowerCase() || ""
-    const title = event.title?.toLowerCase() || ""
+  const internationalKeywords = [
+    "usa",
+    "europe",
+    "uk",
+    "spain",
+    "france",
+    "germany",
+    "italy",
+    "brazil",
+    "chile",
+    "colombia",
+    "mexico",
+    "miami",
+    "new york",
+    "london",
+    "madrid",
+    "barcelona",
+    "paris",
+    "berlin",
+    "rome",
+    "são paulo",
+    "santiago",
+    "bogotá",
+    "mexico city",
+    "international",
+    "world",
+    "global",
+  ]
 
-    const internationalKeywords = [
-      "internacional",
-      "international",
-      "extranjero",
-      "foreign",
-      "visa",
-      "customs",
-      "aduana",
-      "embassy",
-      "embajada",
-      "passport",
-      "pasaporte",
-      "border",
-      "frontera",
-    ]
+  const venue = event.venue?.toLowerCase() || ""
+  const title = event.title?.toLowerCase() || ""
+  const description = event.description?.toLowerCase() || ""
 
-    const internationalCountries = [
-      "usa",
-      "united states",
-      "estados unidos",
-      "canada",
-      "méxico",
-      "mexico",
-      "brasil",
-      "brazil",
-      "chile",
-      "uruguay",
-      "paraguay",
-      "bolivia",
-      "colombia",
-      "venezuela",
-      "peru",
-      "ecuador",
-      "spain",
-      "españa",
-      "france",
-      "francia",
-      "italy",
-      "italia",
-      "germany",
-      "alemania",
-      "uk",
-      "reino unido",
-      "england",
-      "inglaterra",
-    ]
-
-    const textToCheck = `${venue} ${description} ${title}`
-
-    return (
-      internationalKeywords.some((keyword) => textToCheck.includes(keyword)) ||
-      internationalCountries.some((country) => textToCheck.includes(country)) ||
-      getCountryFromVenue(venue) !== "Argentina"
-    )
-  } catch (error) {
-    console.error("Error checking customs requirements:", error)
-    return false
-  }
+  return internationalKeywords.some(
+    (keyword) => venue.includes(keyword) || title.includes(keyword) || description.includes(keyword),
+  )
 }
 
+// Get country from venue name
 export function getCountryFromVenue(venue: string): string {
   if (!venue) return "Argentina"
 
-  const venueText = venue.toLowerCase()
-
-  const countryKeywords = {
-    USA: ["usa", "united states", "estados unidos", "new york", "los angeles", "miami"],
-    Canada: ["canada", "toronto", "vancouver", "montreal"],
-    Mexico: ["méxico", "mexico", "ciudad de méxico", "guadalajara"],
-    Brasil: ["brasil", "brazil", "são paulo", "rio de janeiro"],
-    Chile: ["chile", "santiago", "valparaíso"],
-    Uruguay: ["uruguay", "montevideo"],
-    España: ["españa", "spain", "madrid", "barcelona"],
-    Francia: ["france", "francia", "paris", "lyon"],
+  const countryMap: Record<string, string> = {
+    usa: "Estados Unidos",
+    miami: "Estados Unidos",
+    "new york": "Estados Unidos",
+    europe: "Europa",
+    uk: "Reino Unido",
+    london: "Reino Unido",
+    spain: "España",
+    madrid: "España",
+    barcelona: "España",
+    france: "Francia",
+    paris: "Francia",
+    germany: "Alemania",
+    berlin: "Alemania",
+    italy: "Italia",
+    rome: "Italia",
+    brazil: "Brasil",
+    "são paulo": "Brasil",
+    chile: "Chile",
+    santiago: "Chile",
+    colombia: "Colombia",
+    bogotá: "Colombia",
+    mexico: "México",
+    "mexico city": "México",
   }
 
-  for (const [country, keywords] of Object.entries(countryKeywords)) {
-    if (keywords.some((keyword) => venueText.includes(keyword))) {
+  const venueLower = venue.toLowerCase()
+  for (const [keyword, country] of Object.entries(countryMap)) {
+    if (venueLower.includes(keyword)) {
       return country
     }
   }
@@ -356,53 +537,61 @@ export function getCountryFromVenue(venue: string): string {
   return "Argentina"
 }
 
-export function generateAutomatedTasks(event: any): AutomatedTask[] {
+// Generate automated tasks based on event parameters
+export function generateAutomatedTasks(event: any): Task[] {
   if (!event || !event.date) {
-    console.warn("Event or event date is missing")
     return []
   }
 
   try {
-    const daysUntilEvent = calculateDaysUntilEvent(event.date)
-    const tasks: AutomatedTask[] = []
+    const eventDate = DateTime.fromISO(event.date).setZone("America/Argentina/Buenos_Aires")
+    const now = DateTime.now().setZone("America/Argentina/Buenos_Aires")
+    const isInternational = isInternationalEvent(event)
+    const attendees = event.attendees || 0
+    const eventType = event.type?.toLowerCase() || "general"
 
-    TASK_TEMPLATES.forEach((template, index) => {
-      // Check if template condition is met (if exists)
-      if (template.condition && !template.condition(event)) {
-        return
+    const applicableTasks = TASK_TEMPLATES.filter((template) => {
+      if (template.conditions) {
+        const conditions = template.conditions
+
+        if (conditions.minAttendees && attendees < conditions.minAttendees) return false
+        if (conditions.maxAttendees && attendees > conditions.maxAttendees) return false
+        if (conditions.international && !isInternational) return false
+        if (conditions.venueRequired && !event.venue) return false
+        if (conditions.eventTypes && !conditions.eventTypes.includes(eventType)) return false
       }
 
-      // Calculate due date
-      const dueDate = DateTime.fromISO(event.date, { zone: "America/Argentina/Buenos_Aires" })
-        .minus({ days: template.daysBeforeEvent })
-        .toISO()
+      return true
+    })
 
-      const task: AutomatedTask = {
-        id: `auto-${event.id}-${index}`,
+    return applicableTasks.map((template) => {
+      const dueDate = eventDate.minus({ days: template.daysBeforeEvent })
+      const taskId = `${event.id}-${template.id}-${Date.now()}`
+
+      return {
+        id: taskId,
         title: template.title,
         description: template.description,
         category: template.category,
         priority: template.priority,
-        dueDate: dueDate || event.date,
-        status: "pending",
-        eventId: event.id,
-        createdAt: DateTime.now().setZone("America/Argentina/Buenos_Aires").toISO() || new Date().toISOString(),
-        updatedAt: DateTime.now().setZone("America/Argentina/Buenos_Aires").toISO() || new Date().toISOString(),
-        type: "automated",
+        status: "pending" as const,
+        dueDate: dueDate.toISO() || "",
         estimatedHours: template.estimatedHours,
+        isAutomated: true,
+        eventId: event.id,
+        createdAt: now.toISO() || "",
+        updatedAt: now.toISO() || "",
+        tags: template.tags,
       }
-
-      tasks.push(task)
     })
-
-    return tasks
   } catch (error) {
     console.error("Error generating automated tasks:", error)
     return []
   }
 }
 
-export function getAutomatedTasksStats(tasks: AutomatedTask[]): TaskStats {
+// Get task statistics
+export function getAutomatedTasksStats(tasks: Task[]): TaskStats {
   try {
     const now = DateTime.now().setZone("America/Argentina/Buenos_Aires")
 
@@ -414,18 +603,23 @@ export function getAutomatedTasksStats(tasks: AutomatedTask[]): TaskStats {
       overdue: 0,
       byCategory: {},
       byPriority: {},
+      completionPercentage: 0,
     }
 
     tasks.forEach((task) => {
       // Count by status
       if (task.status === "completed") stats.completed++
       else if (task.status === "in-progress") stats.inProgress++
-      else stats.pending++
+      else if (task.status === "pending") stats.pending++
 
-      // Count overdue
-      const dueDate = DateTime.fromISO(task.dueDate, { zone: "America/Argentina/Buenos_Aires" })
-      if (dueDate.isValid && dueDate < now && task.status !== "completed") {
-        stats.overdue++
+      // Check if overdue
+      try {
+        const dueDate = DateTime.fromISO(task.dueDate)
+        if (task.status !== "completed" && dueDate < now) {
+          stats.overdue++
+        }
+      } catch (error) {
+        console.error("Error parsing due date:", error)
       }
 
       // Count by category
@@ -435,9 +629,12 @@ export function getAutomatedTasksStats(tasks: AutomatedTask[]): TaskStats {
       stats.byPriority[task.priority] = (stats.byPriority[task.priority] || 0) + 1
     })
 
+    // Calculate completion percentage
+    stats.completionPercentage = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0
+
     return stats
   } catch (error) {
-    console.error("Error calculating task stats:", error)
+    console.error("Error calculating stats:", error)
     return {
       total: 0,
       completed: 0,
@@ -446,25 +643,20 @@ export function getAutomatedTasksStats(tasks: AutomatedTask[]): TaskStats {
       overdue: 0,
       byCategory: {},
       byPriority: {},
+      completionPercentage: 0,
     }
   }
 }
 
-export function processAutomatedTasks(eventId: string): void {
-  try {
-    console.log(`Processing automated tasks for event: ${eventId}`)
-    // This is a placeholder function for future implementation
-    // Could include logic for:
-    // - Sending notifications for overdue tasks
-    // - Auto-updating task statuses based on conditions
-    // - Generating reports
-  } catch (error) {
-    console.error("Error processing automated tasks:", error)
-  }
+// Process automated tasks (placeholder function)
+export function processAutomatedTasks(): void {
+  console.log("Processing automated tasks...")
+  // This function can be expanded to handle automated task processing
 }
 
+// Filter tasks by various criteria
 export function filterTasks(
-  tasks: AutomatedTask[],
+  tasks: Task[],
   filters: {
     status?: string
     priority?: string
@@ -473,14 +665,13 @@ export function filterTasks(
     assignee?: string
     type?: string
   },
-): AutomatedTask[] {
+): Task[] {
   try {
     return tasks.filter((task) => {
       if (filters.status && task.status !== filters.status) return false
       if (filters.priority && task.priority !== filters.priority) return false
       if (filters.category && task.category !== filters.category) return false
       if (filters.assignee && task.assignee !== filters.assignee) return false
-      if (filters.type && task.type !== filters.type) return false
 
       if (filters.search) {
         const searchLower = filters.search.toLowerCase()
@@ -492,11 +683,12 @@ export function filterTasks(
     })
   } catch (error) {
     console.error("Error filtering tasks:", error)
-    return tasks
+    return []
   }
 }
 
-export function getTasksByCategory(tasks: AutomatedTask[]): Record<string, AutomatedTask[]> {
+// Get tasks by category
+export function getTasksByCategory(tasks: Task[]): Record<string, Task[]> {
   try {
     return tasks.reduce(
       (acc, task) => {
@@ -506,7 +698,7 @@ export function getTasksByCategory(tasks: AutomatedTask[]): Record<string, Autom
         acc[task.category].push(task)
         return acc
       },
-      {} as Record<string, AutomatedTask[]>,
+      {} as Record<string, Task[]>,
     )
   } catch (error) {
     console.error("Error grouping tasks by category:", error)
@@ -514,15 +706,20 @@ export function getTasksByCategory(tasks: AutomatedTask[]): Record<string, Autom
   }
 }
 
-export function getOverdueTasks(tasks: AutomatedTask[]): AutomatedTask[] {
+// Get overdue tasks
+export function getOverdueTasks(tasks: Task[]): Task[] {
   try {
     const now = DateTime.now().setZone("America/Argentina/Buenos_Aires")
 
     return tasks.filter((task) => {
       if (task.status === "completed") return false
-
-      const dueDate = DateTime.fromISO(task.dueDate, { zone: "America/Argentina/Buenos_Aires" })
-      return dueDate.isValid && dueDate < now
+      try {
+        const dueDate = DateTime.fromISO(task.dueDate)
+        return dueDate < now
+      } catch (error) {
+        console.error("Error parsing due date:", error)
+        return false
+      }
     })
   } catch (error) {
     console.error("Error getting overdue tasks:", error)
@@ -530,16 +727,21 @@ export function getOverdueTasks(tasks: AutomatedTask[]): AutomatedTask[] {
   }
 }
 
-export function getUpcomingTasks(tasks: AutomatedTask[], days = 7): AutomatedTask[] {
+// Get upcoming tasks (due within next 7 days)
+export function getUpcomingTasks(tasks: Task[], days = 7): Task[] {
   try {
     const now = DateTime.now().setZone("America/Argentina/Buenos_Aires")
     const futureDate = now.plus({ days })
 
     return tasks.filter((task) => {
       if (task.status === "completed") return false
-
-      const dueDate = DateTime.fromISO(task.dueDate, { zone: "America/Argentina/Buenos_Aires" })
-      return dueDate.isValid && dueDate >= now && dueDate <= futureDate
+      try {
+        const dueDate = DateTime.fromISO(task.dueDate)
+        return dueDate >= now && dueDate <= futureDate
+      } catch (error) {
+        console.error("Error parsing due date:", error)
+        return false
+      }
     })
   } catch (error) {
     console.error("Error getting upcoming tasks:", error)
@@ -547,21 +749,40 @@ export function getUpcomingTasks(tasks: AutomatedTask[], days = 7): AutomatedTas
   }
 }
 
-export function getUrgentAutomatedEvents(events: any[]): any[] {
+// Get urgent automated events that need attention
+export function getUrgentAutomatedEvents(events: any[], tasks: Task[]): any[] {
   try {
     const now = DateTime.now().setZone("America/Argentina/Buenos_Aires")
 
-    return events.filter((event) => {
-      if (!event.date) return false
+    return events
+      .filter((event) => {
+        try {
+          const eventDate = DateTime.fromISO(event.date).setZone("America/Argentina/Buenos_Aires")
+          const daysUntilEvent = eventDate.diff(now, "days").days
+          return daysUntilEvent > 0 && daysUntilEvent <= 30
+        } catch (error) {
+          console.error("Error parsing event date:", error)
+          return false
+        }
+      })
+      .map((event) => {
+        const eventTasks = tasks.filter((task) => task.eventId === event.id && task.isAutomated)
+        const pendingTasks = eventTasks.filter((task) => task.status === "pending").length
+        const daysUntilEvent = calculateDaysUntilEvent(event.date)
 
-      const eventDate = DateTime.fromISO(event.date, { zone: "America/Argentina/Buenos_Aires" })
-      const daysUntil = eventDate.diff(now, "days").days
-
-      // Events within 30 days are considered urgent for automated task generation
-      return daysUntil <= 30 && daysUntil >= 0
-    })
+        return {
+          id: event.id,
+          venue: event.venue,
+          country: getCountryFromVenue(event.venue || ""),
+          daysUntilEvent,
+          pendingTasks,
+          requiresAttention: pendingTasks > 0 && daysUntilEvent <= 14,
+        }
+      })
+      .filter((event) => event.requiresAttention)
+      .sort((a, b) => a.daysUntilEvent - b.daysUntilEvent)
   } catch (error) {
-    console.error("Error getting urgent events:", error)
+    console.error("Error getting urgent automated events:", error)
     return []
   }
 }
