@@ -12,6 +12,7 @@ import { Calendar, MapPin, Clock, Search, Filter, Plus, Eye, CheckSquare, UserCh
 import { format, parseISO } from "date-fns"
 import { es } from "date-fns/locale"
 import Link from "next/link"
+import { DateTime } from "luxon"
 
 export default function EventsPage() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -39,7 +40,7 @@ export default function EventsPage() {
       else if (statusFilter === "cancelled") matchesStatus = event.status === "cancelled"
       else if (statusFilter === "in-progress") {
         const nowAR = getArgentinaTime()
-        const eventDate = nowAR.fromISO(event.date)
+        const eventDate = DateTime.fromISO(event.date, { zone: "America/Argentina/Buenos_Aires" })
         const isToday = eventDate.hasSame(nowAR, "day")
         matchesStatus = isToday && event.status === "confirmed"
       }
@@ -125,7 +126,7 @@ export default function EventsPage() {
 
   const nowAR = getArgentinaTime()
   const inProgressEvents = allRelevantEvents.filter((event) => {
-    const eventDate = nowAR.fromISO(event.date)
+    const eventDate = DateTime.fromISO(event.date, { zone: "America/Argentina/Buenos_Aires" })
     return eventDate.hasSame(nowAR, "day") && event.status === "confirmed"
   }).length
 
@@ -403,7 +404,7 @@ export default function EventsPage() {
               Mostrando {filteredAndSortedEvents.length} eventos
               {statusFilter === "upcoming" && " de los próximos 30 días"}
               <br />
-              Hora Argentina: {getArgentinaTime().toFormat("dd/MM/yyyy HH:mm")} (GMT-3)
+              Hora Argentina: {nowAR.toFormat("dd/MM/yyyy HH:mm")} (GMT-3)
             </div>
           </CardContent>
         </Card>
