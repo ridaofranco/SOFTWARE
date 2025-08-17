@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, Plus, Star, Edit, Trash2, FileText, Phone, Mail, Users } from "lucide-react"
+import { Search, Plus, Star, Edit, Trash2, FileText, Phone, Mail, MapPin } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import {
@@ -34,21 +34,15 @@ export function VendorManagement() {
   const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false)
   const [isContractDialogOpen, setIsContractDialogOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
-  const [locationFilter, setLocationFilter] = useState("all")
   const [categoryFilter, setCategoryFilter] = useState("all")
 
   const [newVendor, setNewVendor] = useState<Omit<Vendor, "id" | "createdAt" | "updatedAt">>({
     name: "",
-    lastName: "",
-    dni: "",
-    birthDate: "",
-    role: "",
-    category: "ARTE",
-    location: "CAPITAL/BUENOS AIRES",
     contactName: "",
     email: "",
     phone: "",
     address: "",
+    category: "venue",
     notes: "",
   })
 
@@ -81,28 +75,23 @@ export function VendorManagement() {
     getReviewsByVendor,
     addReview,
     addContract,
-    clearAllVendors,
-    initializeVendorsData,
-    getVendorsByLocation,
   } = useVendorStore()
 
   // Obtener eventos para los selectores
   const events = useEventStore((state) => state.events)
 
-  // Inicializar datos al montar el componente
+  // Cargar proveedores al montar el componente
   useEffect(() => {
-    // Forzar la inicialización de datos específicos
-    initializeVendorsData()
     const loadVendors = () => {
       const allVendors = getAllVendors()
       setVendors(allVendors)
       setFilteredVendors(allVendors)
     }
-    // Usar setTimeout para asegurar que los datos se carguen después de la inicialización
-    setTimeout(loadVendors, 100)
-  }, [getAllVendors, initializeVendorsData])
 
-  // Filtrar proveedores cuando cambia el término de búsqueda, ubicación o categoría
+    loadVendors()
+  }, [getAllVendors])
+
+  // Filtrar proveedores cuando cambia el término de búsqueda o la categoría
   useEffect(() => {
     let filtered = [...vendors]
 
@@ -112,17 +101,9 @@ export function VendorManagement() {
       filtered = filtered.filter(
         (vendor) =>
           vendor.name.toLowerCase().includes(term) ||
-          vendor.lastName.toLowerCase().includes(term) ||
-          vendor.dni.includes(term) ||
-          vendor.role.toLowerCase().includes(term) ||
           vendor.contactName.toLowerCase().includes(term) ||
           vendor.email.toLowerCase().includes(term),
       )
-    }
-
-    // Filtrar por ubicación
-    if (locationFilter !== "all") {
-      filtered = filtered.filter((vendor) => vendor.location === locationFilter)
     }
 
     // Filtrar por categoría
@@ -131,7 +112,7 @@ export function VendorManagement() {
     }
 
     setFilteredVendors(filtered)
-  }, [vendors, searchTerm, locationFilter, categoryFilter])
+  }, [vendors, searchTerm, categoryFilter])
 
   // Cargar contratos y reseñas cuando se selecciona un proveedor
   useEffect(() => {
@@ -148,55 +129,10 @@ export function VendorManagement() {
     }
   }, [selectedVendor, getContractsByVendor, getReviewsByVendor])
 
-  // Obtener ubicaciones únicas para el filtro
-  const uniqueLocations = Array.from(new Set(vendors.map((vendor) => vendor.location))).sort()
-
-  // Obtener categorías únicas para el filtro
-  const uniqueCategories = Array.from(new Set(vendors.map((vendor) => vendor.category))).sort()
-
-  // Limpiar todos los proveedores y reinicializar con datos base
-  const handleClearAllVendors = () => {
-    if (
-      confirm(
-        "¿Estás seguro de que deseas reemplazar TODOS los proveedores con los datos base organizados por ubicación?",
-      )
-    ) {
-      clearAllVendors()
-      initializeVendorsData()
-
-      // Actualizar la lista de proveedores
-      const allVendors = getAllVendors()
-      setVendors(allVendors)
-      setFilteredVendors(allVendors)
-      setSelectedVendor(null)
-
-      toast({
-        title: "Proveedores reemplazados",
-        description: "Se han cargado todos los proveedores organizados por ubicación",
-      })
-    }
-  }
-
   // Añadir un nuevo proveedor
   const handleAddVendor = () => {
-    if (!newVendor.name || !newVendor.lastName || !newVendor.dni) {
-      toast({
-        title: "Error",
-        description: "Por favor completa nombre, apellido y DNI",
-        variant: "destructive",
-      })
-      return
-    }
-
     try {
-      const vendorId = addVendor({
-        ...newVendor,
-        contactName: `${newVendor.name} ${newVendor.lastName}`,
-        email:
-          newVendor.email ||
-          `${newVendor.name.toLowerCase()}.${newVendor.lastName.toLowerCase()}@${newVendor.category.toLowerCase()}.com`,
-        phone: newVendor.phone || "+54 11 0000 0000",
-      })
+      const vendorId = addVendor(newVendor)
 
       // Actualizar la lista de proveedores
       const allVendors = getAllVendors()
@@ -205,16 +141,11 @@ export function VendorManagement() {
       // Limpiar el formulario
       setNewVendor({
         name: "",
-        lastName: "",
-        dni: "",
-        birthDate: "",
-        role: "",
-        category: "ARTE",
-        location: "CAPITAL/BUENOS AIRES",
         contactName: "",
         email: "",
         phone: "",
         address: "",
+        category: "venue",
         notes: "",
       })
 
@@ -223,7 +154,7 @@ export function VendorManagement() {
 
       toast({
         title: "Proveedor añadido",
-        description: `${newVendor.name} ${newVendor.lastName} ha sido agregado`,
+        description: "El proveedor se ha añadido correctamente",
       })
     } catch (error) {
       console.error("Error al añadir proveedor:", error)
@@ -240,10 +171,7 @@ export function VendorManagement() {
     if (!selectedVendor) return
 
     try {
-      updateVendor(selectedVendor.id, {
-        ...newVendor,
-        contactName: `${newVendor.name} ${newVendor.lastName}`,
-      })
+      updateVendor(selectedVendor.id, newVendor)
 
       // Actualizar la lista de proveedores
       const allVendors = getAllVendors()
@@ -396,7 +324,7 @@ export function VendorManagement() {
       case "pending":
         return <Badge variant="secondary">Pendiente</Badge>
       case "signed":
-        return <Badge variant="default">Firmado</Badge>
+        return <Badge variant="success">Firmado</Badge>
       case "completed":
         return <Badge variant="default">Completado</Badge>
       case "cancelled":
@@ -406,214 +334,153 @@ export function VendorManagement() {
     }
   }
 
-  // Estadísticas por ubicación
-  const locationStats = uniqueLocations.map((location) => ({
-    location,
-    count: getVendorsByLocation(location).length,
-  }))
-
   return (
     <div className="space-y-6">
-      {/* Estadísticas por ubicación */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        {locationStats.map(({ location, count }) => (
-          <Card key={location} className="text-center">
-            <CardContent className="pt-4">
-              <div className="text-2xl font-bold text-primary">{count}</div>
-              <div className="text-sm text-muted-foreground">{location}</div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="flex flex-1 items-center gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               type="search"
-              placeholder="Buscar por nombre, DNI, rol..."
+              placeholder="Buscar proveedores..."
               className="pl-8"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
-          <Select value={locationFilter} onValueChange={setLocationFilter}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Filtrar por ubicación" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas las ubicaciones</SelectItem>
-              {uniqueLocations.map((location) => (
-                <SelectItem key={location} value={location}>
-                  {location}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
           <Select value={categoryFilter} onValueChange={setCategoryFilter}>
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Filtrar por categoría" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todas las categorías</SelectItem>
-              {uniqueCategories.map((category) => (
-                <SelectItem key={category} value={category}>
-                  {category}
-                </SelectItem>
-              ))}
+              <SelectItem value="venue">Venue</SelectItem>
+              <SelectItem value="catering">Catering</SelectItem>
+              <SelectItem value="decoration">Decoración</SelectItem>
+              <SelectItem value="entertainment">Entretenimiento</SelectItem>
+              <SelectItem value="photography">Fotografía</SelectItem>
+              <SelectItem value="audio">Audio</SelectItem>
+              <SelectItem value="lighting">Iluminación</SelectItem>
+              <SelectItem value="transport">Transporte</SelectItem>
+              <SelectItem value="other">Otros</SelectItem>
             </SelectContent>
           </Select>
         </div>
-        <div className="flex gap-2">
-          <Button variant="destructive" onClick={handleClearAllVendors}>
-            <Trash2 className="mr-2 h-4 w-4" />
-            Reemplazar con Datos Base
-          </Button>
-          <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
+        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              Añadir Proveedor
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>Añadir Nuevo Proveedor</DialogTitle>
+              <DialogDescription>Añade un nuevo proveedor a tu directorio.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="name" className="text-right">
+                  Nombre
+                </Label>
+                <Input
+                  id="name"
+                  value={newVendor.name}
+                  onChange={(e) => setNewVendor({ ...newVendor, name: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="contactName" className="text-right">
+                  Contacto
+                </Label>
+                <Input
+                  id="contactName"
+                  value={newVendor.contactName}
+                  onChange={(e) => setNewVendor({ ...newVendor, contactName: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="email" className="text-right">
+                  Email
+                </Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={newVendor.email}
+                  onChange={(e) => setNewVendor({ ...newVendor, email: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="phone" className="text-right">
+                  Teléfono
+                </Label>
+                <Input
+                  id="phone"
+                  value={newVendor.phone}
+                  onChange={(e) => setNewVendor({ ...newVendor, phone: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="category" className="text-right">
+                  Categoría
+                </Label>
+                <Select
+                  value={newVendor.category}
+                  onValueChange={(value) => setNewVendor({ ...newVendor, category: value })}
+                >
+                  <SelectTrigger className="col-span-3">
+                    <SelectValue placeholder="Seleccionar categoría" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="venue">Venue</SelectItem>
+                    <SelectItem value="catering">Catering</SelectItem>
+                    <SelectItem value="decoration">Decoración</SelectItem>
+                    <SelectItem value="entertainment">Entretenimiento</SelectItem>
+                    <SelectItem value="photography">Fotografía</SelectItem>
+                    <SelectItem value="audio">Audio</SelectItem>
+                    <SelectItem value="lighting">Iluminación</SelectItem>
+                    <SelectItem value="transport">Transporte</SelectItem>
+                    <SelectItem value="other">Otros</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="address" className="text-right">
+                  Dirección
+                </Label>
+                <Input
+                  id="address"
+                  value={newVendor.address || ""}
+                  onChange={(e) => setNewVendor({ ...newVendor, address: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="notes" className="text-right">
+                  Notas
+                </Label>
+                <Textarea
+                  id="notes"
+                  value={newVendor.notes || ""}
+                  onChange={(e) => setNewVendor({ ...newVendor, notes: e.target.value })}
+                  className="col-span-3"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleAddVendor} disabled={!newVendor.name || !newVendor.email || !newVendor.phone}>
                 Añadir Proveedor
               </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-[600px]">
-              <DialogHeader>
-                <DialogTitle>Añadir Nuevo Proveedor</DialogTitle>
-                <DialogDescription>
-                  Añade un nuevo proveedor a tu directorio organizado por ubicación.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="name">Nombre *</Label>
-                    <Input
-                      id="name"
-                      value={newVendor.name}
-                      onChange={(e) => setNewVendor({ ...newVendor, name: e.target.value })}
-                      placeholder="Nombre"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="lastName">Apellido *</Label>
-                    <Input
-                      id="lastName"
-                      value={newVendor.lastName}
-                      onChange={(e) => setNewVendor({ ...newVendor, lastName: e.target.value })}
-                      placeholder="Apellido"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="dni">DNI *</Label>
-                    <Input
-                      id="dni"
-                      value={newVendor.dni}
-                      onChange={(e) => setNewVendor({ ...newVendor, dni: e.target.value })}
-                      placeholder="DNI"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="birthDate">Fecha de Nacimiento</Label>
-                    <Input
-                      id="birthDate"
-                      value={newVendor.birthDate}
-                      onChange={(e) => setNewVendor({ ...newVendor, birthDate: e.target.value })}
-                      placeholder="DD/MM/YYYY"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="role">Rol</Label>
-                    <Input
-                      id="role"
-                      value={newVendor.role}
-                      onChange={(e) => setNewVendor({ ...newVendor, role: e.target.value })}
-                      placeholder="Ej: BAILARÍN, PRODUCTOR, etc."
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="category">Categoría</Label>
-                    <Select
-                      value={newVendor.category}
-                      onValueChange={(value) => setNewVendor({ ...newVendor, category: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Seleccionar categoría" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="ARTE">ARTE</SelectItem>
-                        <SelectItem value="FIEBRE DISCO">FIEBRE DISCO</SelectItem>
-                        <SelectItem value="MARKETING">MARKETING</SelectItem>
-                        <SelectItem value="BOOKING">BOOKING</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div>
-                  <Label htmlFor="location">Ubicación</Label>
-                  <Select
-                    value={newVendor.location}
-                    onValueChange={(value) => setNewVendor({ ...newVendor, location: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Seleccionar ubicación" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="MONTEVIDEO">MONTEVIDEO</SelectItem>
-                      <SelectItem value="CÓRDOBA">CÓRDOBA</SelectItem>
-                      <SelectItem value="MENDOZA">MENDOZA</SelectItem>
-                      <SelectItem value="QUILMES">QUILMES</SelectItem>
-                      <SelectItem value="ROSARIO">ROSARIO</SelectItem>
-                      <SelectItem value="CAPITAL/BUENOS AIRES">CAPITAL/BUENOS AIRES</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="email">Email</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={newVendor.email}
-                      onChange={(e) => setNewVendor({ ...newVendor, email: e.target.value })}
-                      placeholder="email@ejemplo.com"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="phone">Teléfono</Label>
-                    <Input
-                      id="phone"
-                      value={newVendor.phone}
-                      onChange={(e) => setNewVendor({ ...newVendor, phone: e.target.value })}
-                      placeholder="+54 11 0000 0000"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <Label htmlFor="notes">Notas</Label>
-                  <Textarea
-                    id="notes"
-                    value={newVendor.notes || ""}
-                    onChange={(e) => setNewVendor({ ...newVendor, notes: e.target.value })}
-                    placeholder="Notas adicionales..."
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button onClick={handleAddVendor} disabled={!newVendor.name || !newVendor.lastName || !newVendor.dni}>
-                  Añadir Proveedor
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </div>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -622,7 +489,7 @@ export function VendorManagement() {
             <Card>
               <CardContent className="pt-6">
                 <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <Users className="mb-2 h-12 w-12 text-muted-foreground" />
+                  <FileText className="mb-2 h-12 w-12 text-muted-foreground" />
                   <h3 className="mb-1 text-lg font-medium">No se encontraron proveedores</h3>
                   <p className="text-sm text-muted-foreground">
                     No hay proveedores que coincidan con tu búsqueda. Intenta con otros términos o añade un nuevo
@@ -647,36 +514,27 @@ export function VendorManagement() {
             >
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">
-                    {vendor.name} {vendor.lastName}
-                  </CardTitle>
-                  <div className="flex gap-1">
-                    <Badge variant="outline">{vendor.location}</Badge>
-                    <Badge>{vendor.category}</Badge>
-                  </div>
+                  <CardTitle>{vendor.name}</CardTitle>
+                  <Badge>{vendor.category}</Badge>
                 </div>
-                <CardDescription>{vendor.role}</CardDescription>
+                <CardDescription>{vendor.contactName}</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2 text-sm">
                   <div className="flex items-center">
-                    <FileText className="mr-2 h-4 w-4 text-muted-foreground" />
-                    <span>DNI: {vendor.dni}</span>
-                  </div>
-                  {vendor.birthDate && (
-                    <div className="flex items-center">
-                      <span className="mr-2 text-muted-foreground">🎂</span>
-                      <span>{vendor.birthDate}</span>
-                    </div>
-                  )}
-                  <div className="flex items-center">
                     <Mail className="mr-2 h-4 w-4 text-muted-foreground" />
-                    <span className="truncate">{vendor.email}</span>
+                    <span>{vendor.email}</span>
                   </div>
                   <div className="flex items-center">
                     <Phone className="mr-2 h-4 w-4 text-muted-foreground" />
                     <span>{vendor.phone}</span>
                   </div>
+                  {vendor.address && (
+                    <div className="flex items-center">
+                      <MapPin className="mr-2 h-4 w-4 text-muted-foreground" />
+                      <span>{vendor.address}</span>
+                    </div>
+                  )}
                   {vendor.rating !== undefined && (
                     <div className="flex items-center">
                       <div className="flex mr-2">{renderStars(vendor.rating)}</div>
@@ -694,16 +552,11 @@ export function VendorManagement() {
                     setSelectedVendor(vendor)
                     setNewVendor({
                       name: vendor.name,
-                      lastName: vendor.lastName,
-                      dni: vendor.dni,
-                      birthDate: vendor.birthDate,
-                      role: vendor.role,
-                      category: vendor.category,
-                      location: vendor.location,
                       contactName: vendor.contactName,
                       email: vendor.email,
                       phone: vendor.phone,
                       address: vendor.address || "",
+                      category: vendor.category,
                       notes: vendor.notes || "",
                     })
                     setIsEditDialogOpen(true)
@@ -735,9 +588,7 @@ export function VendorManagement() {
         <Card className="mt-6">
           <CardHeader>
             <div className="flex items-center justify-between">
-              <CardTitle>
-                Detalles del Proveedor: {selectedVendor.name} {selectedVendor.lastName}
-              </CardTitle>
+              <CardTitle>Detalles del Proveedor: {selectedVendor.name}</CardTitle>
               {selectedVendor.rating !== undefined && (
                 <div className="flex items-center">
                   <div className="flex mr-2">{renderStars(selectedVendor.rating)}</div>
@@ -745,9 +596,7 @@ export function VendorManagement() {
                 </div>
               )}
             </div>
-            <CardDescription>
-              {selectedVendor.role} - {selectedVendor.category} - {selectedVendor.location}
-            </CardDescription>
+            <CardDescription>Información detallada, contratos y reseñas del proveedor seleccionado.</CardDescription>
           </CardHeader>
           <CardContent>
             <Tabs defaultValue="contracts">
@@ -1021,119 +870,101 @@ export function VendorManagement() {
       )}
 
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-[600px]">
+        <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>Editar Proveedor</DialogTitle>
             <DialogDescription>Actualiza la información de este proveedor.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="edit-name">Nombre *</Label>
-                <Input
-                  id="edit-name"
-                  value={newVendor.name}
-                  onChange={(e) => setNewVendor({ ...newVendor, name: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="edit-lastName">Apellido *</Label>
-                <Input
-                  id="edit-lastName"
-                  value={newVendor.lastName}
-                  onChange={(e) => setNewVendor({ ...newVendor, lastName: e.target.value })}
-                />
-              </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="edit-name" className="text-right">
+                Nombre
+              </Label>
+              <Input
+                id="edit-name"
+                value={newVendor.name}
+                onChange={(e) => setNewVendor({ ...newVendor, name: e.target.value })}
+                className="col-span-3"
+              />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="edit-dni">DNI *</Label>
-                <Input
-                  id="edit-dni"
-                  value={newVendor.dni}
-                  onChange={(e) => setNewVendor({ ...newVendor, dni: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="edit-birthDate">Fecha de Nacimiento</Label>
-                <Input
-                  id="edit-birthDate"
-                  value={newVendor.birthDate}
-                  onChange={(e) => setNewVendor({ ...newVendor, birthDate: e.target.value })}
-                />
-              </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="edit-contactName" className="text-right">
+                Contacto
+              </Label>
+              <Input
+                id="edit-contactName"
+                value={newVendor.contactName}
+                onChange={(e) => setNewVendor({ ...newVendor, contactName: e.target.value })}
+                className="col-span-3"
+              />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="edit-role">Rol</Label>
-                <Input
-                  id="edit-role"
-                  value={newVendor.role}
-                  onChange={(e) => setNewVendor({ ...newVendor, role: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="edit-category">Categoría</Label>
-                <Select
-                  value={newVendor.category}
-                  onValueChange={(value) => setNewVendor({ ...newVendor, category: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ARTE">ARTE</SelectItem>
-                    <SelectItem value="FIEBRE DISCO">FIEBRE DISCO</SelectItem>
-                    <SelectItem value="MARKETING">MARKETING</SelectItem>
-                    <SelectItem value="BOOKING">BOOKING</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="edit-email" className="text-right">
+                Email
+              </Label>
+              <Input
+                id="edit-email"
+                type="email"
+                value={newVendor.email}
+                onChange={(e) => setNewVendor({ ...newVendor, email: e.target.value })}
+                className="col-span-3"
+              />
             </div>
-            <div>
-              <Label htmlFor="edit-location">Ubicación</Label>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="edit-phone" className="text-right">
+                Teléfono
+              </Label>
+              <Input
+                id="edit-phone"
+                value={newVendor.phone}
+                onChange={(e) => setNewVendor({ ...newVendor, phone: e.target.value })}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="edit-category" className="text-right">
+                Categoría
+              </Label>
               <Select
-                value={newVendor.location}
-                onValueChange={(value) => setNewVendor({ ...newVendor, location: value })}
+                value={newVendor.category}
+                onValueChange={(value) => setNewVendor({ ...newVendor, category: value })}
               >
-                <SelectTrigger>
-                  <SelectValue />
+                <SelectTrigger className="col-span-3">
+                  <SelectValue placeholder="Seleccionar categoría" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="MONTEVIDEO">MONTEVIDEO</SelectItem>
-                  <SelectItem value="CÓRDOBA">CÓRDOBA</SelectItem>
-                  <SelectItem value="MENDOZA">MENDOZA</SelectItem>
-                  <SelectItem value="QUILMES">QUILMES</SelectItem>
-                  <SelectItem value="ROSARIO">ROSARIO</SelectItem>
-                  <SelectItem value="CAPITAL/BUENOS AIRES">CAPITAL/BUENOS AIRES</SelectItem>
+                  <SelectItem value="venue">Venue</SelectItem>
+                  <SelectItem value="catering">Catering</SelectItem>
+                  <SelectItem value="decoration">Decoración</SelectItem>
+                  <SelectItem value="entertainment">Entretenimiento</SelectItem>
+                  <SelectItem value="photography">Fotografía</SelectItem>
+                  <SelectItem value="audio">Audio</SelectItem>
+                  <SelectItem value="lighting">Iluminación</SelectItem>
+                  <SelectItem value="transport">Transporte</SelectItem>
+                  <SelectItem value="other">Otros</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="edit-email">Email</Label>
-                <Input
-                  id="edit-email"
-                  type="email"
-                  value={newVendor.email}
-                  onChange={(e) => setNewVendor({ ...newVendor, email: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label htmlFor="edit-phone">Teléfono</Label>
-                <Input
-                  id="edit-phone"
-                  value={newVendor.phone}
-                  onChange={(e) => setNewVendor({ ...newVendor, phone: e.target.value })}
-                />
-              </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="edit-address" className="text-right">
+                Dirección
+              </Label>
+              <Input
+                id="edit-address"
+                value={newVendor.address || ""}
+                onChange={(e) => setNewVendor({ ...newVendor, address: e.target.value })}
+                className="col-span-3"
+              />
             </div>
-            <div>
-              <Label htmlFor="edit-notes">Notas</Label>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="edit-notes" className="text-right">
+                Notas
+              </Label>
               <Textarea
                 id="edit-notes"
                 value={newVendor.notes || ""}
                 onChange={(e) => setNewVendor({ ...newVendor, notes: e.target.value })}
+                className="col-span-3"
               />
             </div>
           </div>
@@ -1141,7 +972,7 @@ export function VendorManagement() {
             <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleUpdateVendor} disabled={!newVendor.name || !newVendor.lastName || !newVendor.dni}>
+            <Button onClick={handleUpdateVendor} disabled={!newVendor.name || !newVendor.email || !newVendor.phone}>
               Guardar Cambios
             </Button>
           </DialogFooter>

@@ -1,9 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    serverComponentsExternalPackages: ['luxon']
-  },
-  transpilePackages: ['lucide-react'],
+  reactStrictMode: true,
   eslint: {
     ignoreDuringBuilds: true,
   },
