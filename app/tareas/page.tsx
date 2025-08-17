@@ -1,692 +1,667 @@
 "use client"
 
-import { useState } from "react"
-import { useUnifiedEventStore } from "@/store/unified-event-store"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useState, useEffect, useMemo } from "react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Plus, Calendar, User, AlertTriangle, CheckCircle, Clock, Edit, Trash2, Play, Square } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Calendar, Clock, User, Filter, Search, Plus, CheckCircle, AlertCircle, Circle, Pause } from "lucide-react"
+import { useUnifiedEventStore } from "@/store/unified-event-store"
+import {
+  generateAutomatedTasks,
+  getAutomatedTasksStats,
+  filterTasks,
+  getOverdueTasks,
+  getUpcomingTasks,
+  type AutomatedTask,
+} from "@/lib/automated-tasks-service"
+import { DateTime } from "luxon"
 import { useToast } from "@/hooks/use-toast"
 
-export default function TareasPage() {
-  const { tasks, events, addTask, updateTask, deleteTask } = useUnifiedEventStore()
+export default function TasksPage() {
+  const { events, tasks, addTask, updateTask, deleteTask } = useUnifiedEventStore()
   const { toast } = useToast()
 
-  const [showAddForm, setShowAddForm] = useState(false)
-  const [editingTask, setEditingTask] = useState<string | null>(null)
-  const [filterStatus, setFilterStatus] = useState<string>("all")
-  const [filterPriority, setFilterPriority] = useState<string>("all")
-  const [filterType, setFilterType] = useState<string>("all")
-  const [searchQuery, setSearchQuery] = useState("")
-
+  // Local state
+  const [searchTerm, setSearchTerm] = useState("")
+  const [statusFilter, setStatusFilter] = useState("all")
+  const [priorityFilter, setPriorityFilter] = useState("all")
+  const [categoryFilter, setCategoryFilter] = useState("all")
+  const [typeFilter, setTypeFilter] = useState("all")
+  const [showNewTaskForm, setShowNewTaskForm] = useState(false)
   const [newTask, setNewTask] = useState({
     title: "",
     description: "",
-    status: "pending" as "pending" | "in-progress" | "completed",
-    priority: "medium" as "low" | "medium" | "high",
-    assignee: "Franco",
-    dueDate: "",
-    eventId: "none",
     category: "General",
-  })
-
-  const [editTask, setEditTask] = useState({
-    title: "",
-    description: "",
-    status: "pending" as "pending" | "in-progress" | "completed",
-    priority: "medium" as "low" | "medium" | "high",
-    assignee: "",
+    priority: "medium" as const,
     dueDate: "",
+    estimatedHours: 1,
+    assignee: "",
     eventId: "",
-    category: "",
   })
 
-  // Filtrar tareas
-  const filteredTasks = tasks.filter((task) => {
-    const statusMatch = filterStatus === "all" || task.status === filterStatus
-    const priorityMatch = filterPriority === "all" || task.priority === filterPriority
+  // Generate automated tasks for events that don't have them
+  useEffect(() => {
+    events.forEach((event) => {
+      const eventTasks = tasks.filter((task) => task.eventId === event.id)
+      const hasAutomatedTasks = eventTasks.some((task) => task.isAutomated)
 
-    // Filtro por tipo (manual vs automática)
-    const typeMatch =
-      filterType === "all" ||
-      (filterType === "manual" && !task.isAutomated) ||
-      (filterType === "automated" && task.isAutomated)
-
-    // Filtro por búsqueda
-    const searchMatch =
-      !searchQuery ||
-      task.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      task.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      task.assignee.toLowerCase().includes(searchQuery.toLowerCase())
-
-    return statusMatch && priorityMatch && typeMatch && searchMatch
-  })
-
-  // Estadísticas
-  const totalTasks = tasks.length
-  const completedTasks = tasks.filter((t) => t.status === "completed").length
-  const pendingTasks = tasks.filter((t) => t.status === "pending").length
-  const inProgressTasks = tasks.filter((t) => t.status === "in-progress").length
-  const automatedTasks = tasks.filter((t) => t.isAutomated).length
-
-  const handleAddTask = () => {
-    if (!newTask.title || !newTask.dueDate) {
-      toast({
-        title: "Error",
-        description: "Por favor completa el título y fecha de vencimiento",
-        variant: "destructive",
-      })
-      return
-    }
-
-    const taskToAdd = {
-      id: `task-${Date.now()}`,
-      ...newTask,
-      eventId: newTask.eventId === "none" ? undefined : newTask.eventId,
-      isAutomated: false,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }
-
-    addTask(taskToAdd)
-
-    toast({
-      title: "Tarea creada",
-      description: `${newTask.title} ha sido agregada`,
+      if (!hasAutomatedTasks && event.date) {
+        const automatedTasks = generateAutomatedTasks(event)
+        automatedTasks.forEach((task) => {
+          addTask(task)
+        })
+      }
     })
+  }, [events, tasks, addTask])
 
-    // Reset form
-    setNewTask({
-      title: "",
-      description: "",
-      status: "pending",
-      priority: "medium",
-      assignee: "Franco",
-      dueDate: "",
-      eventId: "none",
-      category: "General",
+  // Filter and search tasks
+  const filteredTasks = useMemo(() => {
+    return filterTasks(tasks, {
+      status: statusFilter === "all" ? undefined : statusFilter,
+      priority: priorityFilter === "all" ? undefined : priorityFilter,
+      category: categoryFilter === "all" ? undefined : categoryFilter,
+      type: typeFilter === "all" ? undefined : typeFilter,
+      search: searchTerm || undefined,
     })
-    setShowAddForm(false)
-  }
+  }, [tasks, searchTerm, statusFilter, priorityFilter, categoryFilter, typeFilter])
 
-  const handleStatusChange = (taskId: string, newStatus: "pending" | "in-progress" | "completed") => {
+  // Get task statistics
+  const stats = getAutomatedTasksStats(filteredTasks)
+  const overdueTasks = getOverdueTasks(filteredTasks)
+  const upcomingTasks = getUpcomingTasks(filteredTasks)
+
+  // Get unique categories and assignees for filters
+  const categories = Array.from(new Set(tasks.map((task) => task.category)))
+  const assignees = Array.from(new Set(tasks.map((task) => task.assignee).filter(Boolean)))
+
+  // Handle task status update
+  const handleStatusUpdate = (taskId: string, newStatus: AutomatedTask["status"]) => {
+    const now = DateTime.now().setZone("America/Argentina/Buenos_Aires").toISO() || ""
     updateTask(taskId, {
       status: newStatus,
-      updatedAt: new Date().toISOString(),
-    })
-    toast({
-      title: "Estado actualizado",
-      description: "La tarea ha sido actualizada",
-    })
-  }
-
-  const handleEditTask = (task: any) => {
-    setEditTask({
-      title: task.title,
-      description: task.description,
-      status: task.status,
-      priority: task.priority,
-      assignee: task.assignee,
-      dueDate: task.dueDate,
-      eventId: task.eventId || "",
-      category: task.category,
-    })
-    setEditingTask(task.id)
-  }
-
-  const handleSaveEdit = () => {
-    if (!editTask.title || !editTask.dueDate) {
-      toast({
-        title: "Error",
-        description: "Por favor completa el título y fecha de vencimiento",
-        variant: "destructive",
-      })
-      return
-    }
-
-    updateTask(editingTask!, {
-      ...editTask,
-      updatedAt: new Date().toISOString(),
+      updatedAt: now,
     })
 
     toast({
       title: "Tarea actualizada",
-      description: "Los cambios han sido guardados",
+      description: `Estado cambiado a ${newStatus}`,
+    })
+  }
+
+  // Handle new task creation
+  const handleCreateTask = () => {
+    if (!newTask.title || !newTask.dueDate) {
+      toast({
+        title: "Error",
+        description: "Título y fecha de vencimiento son requeridos",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const now = DateTime.now().setZone("America/Argentina/Buenos_Aires").toISO() || ""
+    const task: AutomatedTask = {
+      id: `manual-${Date.now()}`,
+      title: newTask.title,
+      description: newTask.description,
+      category: newTask.category,
+      priority: newTask.priority,
+      status: "pending",
+      dueDate: newTask.dueDate,
+      estimatedHours: newTask.estimatedHours,
+      assignee: newTask.assignee || undefined,
+      isAutomated: false,
+      eventId: newTask.eventId,
+      createdAt: now,
+      updatedAt: now,
+      type: "manual",
+    }
+
+    addTask(task)
+    setShowNewTaskForm(false)
+    setNewTask({
+      title: "",
+      description: "",
+      category: "General",
+      priority: "medium",
+      dueDate: "",
+      estimatedHours: 1,
+      assignee: "",
+      eventId: "",
     })
 
-    setEditingTask(null)
+    toast({
+      title: "Tarea creada",
+      description: "Nueva tarea agregada exitosamente",
+    })
   }
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case "high":
-        return "bg-red-100 text-red-800"
-      case "medium":
-        return "bg-yellow-100 text-yellow-800"
-      case "low":
-        return "bg-green-100 text-green-800"
-      default:
-        return "bg-gray-100 text-gray-800"
-    }
-  }
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "completed":
-        return "bg-green-100 text-green-800"
-      case "in-progress":
-        return "bg-blue-100 text-blue-800"
-      case "pending":
-        return "bg-orange-100 text-orange-800"
-      default:
-        return "bg-gray-100 text-gray-800"
-    }
-  }
-
+  // Get status icon
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "completed":
-        return <CheckCircle className="w-4 h-4" />
+        return <CheckCircle className="h-4 w-4 text-green-500" />
       case "in-progress":
-        return <Clock className="w-4 h-4" />
+        return <Pause className="h-4 w-4 text-blue-500" />
       case "pending":
-        return <AlertTriangle className="w-4 h-4" />
+        return <Circle className="h-4 w-4 text-gray-400" />
       default:
-        return <Clock className="w-4 h-4" />
+        return <AlertCircle className="h-4 w-4 text-red-500" />
     }
   }
 
-  const isOverdue = (dueDate: string) => {
-    return new Date(dueDate) < new Date() && new Date(dueDate).toDateString() !== new Date().toDateString()
+  // Get priority color
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case "urgent":
+        return "bg-red-100 text-red-800 border-red-200"
+      case "high":
+        return "bg-orange-100 text-orange-800 border-orange-200"
+      case "medium":
+        return "bg-yellow-100 text-yellow-800 border-yellow-200"
+      case "low":
+        return "bg-green-100 text-green-800 border-green-200"
+      default:
+        return "bg-gray-100 text-gray-800 border-gray-200"
+    }
+  }
+
+  // Check if task is overdue
+  const isOverdue = (task: AutomatedTask) => {
+    if (task.status === "completed") return false
+    const now = DateTime.now().setZone("America/Argentina/Buenos_Aires")
+    const dueDate = DateTime.fromISO(task.dueDate)
+    return dueDate < now
   }
 
   return (
-    <div className="container mx-auto p-6 max-w-7xl">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Gestión de Tareas</h1>
-        <p className="text-gray-600">Organiza y supervisa todas las tareas del equipo</p>
-      </div>
-
-      {/* Estadísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Total Tareas</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totalTasks}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Completadas</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{completedTasks}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">En Progreso</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{inProgressTasks}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Pendientes</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-orange-600">{pendingTasks}</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">🤖 Automáticas</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-purple-600">{automatedTasks}</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Filtros y búsqueda */}
-      <div className="flex flex-col md:flex-row gap-4 mb-6">
-        <Button onClick={() => setShowAddForm(true)}>
-          <Plus className="mr-2 h-4 w-4" />
+    <div className="container mx-auto p-6 space-y-6">
+      <div className="flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold">Gestión de Tareas</h1>
+          <p className="text-muted-foreground">Administra tareas automáticas y manuales para tus eventos</p>
+        </div>
+        <Button onClick={() => setShowNewTaskForm(true)}>
+          <Plus className="h-4 w-4 mr-2" />
           Nueva Tarea
         </Button>
-
-        <div className="relative flex-1">
-          <Input
-            placeholder="Buscar tareas..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-4"
-          />
-        </div>
-
-        <div className="flex gap-2">
-          <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="w-48">
-              <SelectValue placeholder="Filtrar por estado" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos los estados</SelectItem>
-              <SelectItem value="pending">Pendientes</SelectItem>
-              <SelectItem value="in-progress">En progreso</SelectItem>
-              <SelectItem value="completed">Completadas</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Select value={filterPriority} onValueChange={setFilterPriority}>
-            <SelectTrigger className="w-48">
-              <SelectValue placeholder="Filtrar por prioridad" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todas las prioridades</SelectItem>
-              <SelectItem value="high">Alta</SelectItem>
-              <SelectItem value="medium">Media</SelectItem>
-              <SelectItem value="low">Baja</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Select value={filterType} onValueChange={setFilterType}>
-            <SelectTrigger className="w-48">
-              <SelectValue placeholder="Filtrar por tipo" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos los tipos</SelectItem>
-              <SelectItem value="manual">Tareas Manuales</SelectItem>
-              <SelectItem value="automated">🤖 Tareas Automáticas</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
       </div>
 
-      {/* Formulario nueva tarea */}
-      {showAddForm && (
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Nueva Tarea</CardTitle>
+      {/* Statistics Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total de Tareas</CardTitle>
+            <Circle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
-                <Label>Título *</Label>
+            <div className="text-2xl font-bold">{stats.total}</div>
+            <p className="text-xs text-muted-foreground">{stats.completed} completadas</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">En Progreso</CardTitle>
+            <Pause className="h-4 w-4 text-blue-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.inProgress}</div>
+            <p className="text-xs text-muted-foreground">{stats.pending} pendientes</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Vencidas</CardTitle>
+            <AlertCircle className="h-4 w-4 text-red-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">{stats.overdue}</div>
+            <p className="text-xs text-muted-foreground">Requieren atención</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Progreso</CardTitle>
+            <CheckCircle className="h-4 w-4 text-green-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0}%
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
+              <div
+                className="bg-green-500 h-2 rounded-full transition-all duration-300"
+                style={{
+                  width: `${stats.total > 0 ? (stats.completed / stats.total) * 100 : 0}%`,
+                }}
+              />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filters */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Filter className="h-5 w-5" />
+            Filtros
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar tareas..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Estado" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los estados</SelectItem>
+                <SelectItem value="pending">Pendiente</SelectItem>
+                <SelectItem value="in-progress">En progreso</SelectItem>
+                <SelectItem value="completed">Completada</SelectItem>
+                <SelectItem value="cancelled">Cancelada</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Prioridad" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas las prioridades</SelectItem>
+                <SelectItem value="urgent">Urgente</SelectItem>
+                <SelectItem value="high">Alta</SelectItem>
+                <SelectItem value="medium">Media</SelectItem>
+                <SelectItem value="low">Baja</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Categoría" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas las categorías</SelectItem>
+                {categories.map((category) => (
+                  <SelectItem key={category} value={category}>
+                    {category}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Tipo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos los tipos</SelectItem>
+                <SelectItem value="automated">Automática</SelectItem>
+                <SelectItem value="manual">Manual</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Tasks Tabs */}
+      <Tabs defaultValue="all" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="all">Todas ({filteredTasks.length})</TabsTrigger>
+          <TabsTrigger value="overdue">Vencidas ({overdueTasks.length})</TabsTrigger>
+          <TabsTrigger value="upcoming">Próximas ({upcomingTasks.length})</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="all" className="space-y-4">
+          {filteredTasks.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <Circle className="h-12 w-12 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No hay tareas</h3>
+                <p className="text-muted-foreground text-center">
+                  No se encontraron tareas que coincidan con los filtros seleccionados.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4">
+              {filteredTasks.map((task) => {
+                const event = events.find((e) => e.id === task.eventId)
+                const dueDate = DateTime.fromISO(task.dueDate)
+                const isTaskOverdue = isOverdue(task)
+
+                return (
+                  <Card key={task.id} className={`${isTaskOverdue ? "border-red-200 bg-red-50" : ""}`}>
+                    <CardHeader>
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-start gap-3">
+                          {getStatusIcon(task.status)}
+                          <div className="flex-1">
+                            <CardTitle className="text-lg">{task.title}</CardTitle>
+                            <CardDescription className="mt-1">{task.description}</CardDescription>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge className={getPriorityColor(task.priority)}>{task.priority}</Badge>
+                          <Badge variant="outline">{task.isAutomated ? "Automática" : "Manual"}</Badge>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Calendar className="h-4 w-4" />
+                          <span>
+                            Vence: {dueDate.toFormat("dd/MM/yyyy")}
+                            {isTaskOverdue && <span className="text-red-600 ml-1">(Vencida)</span>}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Clock className="h-4 w-4" />
+                          <span>{task.estimatedHours}h estimadas</span>
+                        </div>
+                        {task.assignee && (
+                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <User className="h-4 w-4" />
+                            <span>{task.assignee}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="secondary">{task.category}</Badge>
+                          {event && <Badge variant="outline">{event.title}</Badge>}
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {task.status !== "completed" && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleStatusUpdate(task.id, "in-progress")}
+                                disabled={task.status === "in-progress"}
+                              >
+                                En Progreso
+                              </Button>
+                              <Button size="sm" onClick={() => handleStatusUpdate(task.id, "completed")}>
+                                Completar
+                              </Button>
+                            </>
+                          )}
+                          {task.status === "completed" && (
+                            <Button size="sm" variant="outline" onClick={() => handleStatusUpdate(task.id, "pending")}>
+                              Reabrir
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )
+              })}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="overdue" className="space-y-4">
+          {overdueTasks.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <CheckCircle className="h-12 w-12 text-green-500 mb-4" />
+                <h3 className="text-lg font-semibold mb-2">¡Excelente!</h3>
+                <p className="text-muted-foreground text-center">No tienes tareas vencidas en este momento.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4">
+              {overdueTasks.map((task) => {
+                const event = events.find((e) => e.id === task.eventId)
+                const dueDate = DateTime.fromISO(task.dueDate)
+
+                return (
+                  <Card key={task.id} className="border-red-200 bg-red-50">
+                    <CardHeader>
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-start gap-3">
+                          <AlertCircle className="h-5 w-5 text-red-500 mt-0.5" />
+                          <div>
+                            <CardTitle className="text-lg text-red-900">{task.title}</CardTitle>
+                            <CardDescription className="text-red-700">{task.description}</CardDescription>
+                          </div>
+                        </div>
+                        <Badge className="bg-red-100 text-red-800 border-red-200">Vencida</Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4 text-sm">
+                          <span className="text-red-600">Venció: {dueDate.toFormat("dd/MM/yyyy")}</span>
+                          {event && <Badge variant="outline">{event.title}</Badge>}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleStatusUpdate(task.id, "in-progress")}
+                          >
+                            Iniciar
+                          </Button>
+                          <Button size="sm" onClick={() => handleStatusUpdate(task.id, "completed")}>
+                            Completar
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )
+              })}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="upcoming" className="space-y-4">
+          {upcomingTasks.length === 0 ? (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-12">
+                <Calendar className="h-12 w-12 text-muted-foreground mb-4" />
+                <h3 className="text-lg font-semibold mb-2">Sin tareas próximas</h3>
+                <p className="text-muted-foreground text-center">
+                  No tienes tareas programadas para los próximos 7 días.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4">
+              {upcomingTasks.map((task) => {
+                const event = events.find((e) => e.id === task.eventId)
+                const dueDate = DateTime.fromISO(task.dueDate)
+                const daysUntilDue = Math.ceil(dueDate.diff(DateTime.now(), "days").days)
+
+                return (
+                  <Card key={task.id}>
+                    <CardHeader>
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-start gap-3">
+                          <Clock className="h-5 w-5 text-blue-500 mt-0.5" />
+                          <div>
+                            <CardTitle className="text-lg">{task.title}</CardTitle>
+                            <CardDescription>{task.description}</CardDescription>
+                          </div>
+                        </div>
+                        <Badge variant="secondary">{daysUntilDue === 0 ? "Hoy" : `${daysUntilDue} días`}</Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                          <span>Vence: {dueDate.toFormat("dd/MM/yyyy")}</span>
+                          {event && <Badge variant="outline">{event.title}</Badge>}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleStatusUpdate(task.id, "in-progress")}
+                            disabled={task.status === "in-progress"}
+                          >
+                            Iniciar
+                          </Button>
+                          <Button size="sm" onClick={() => handleStatusUpdate(task.id, "completed")}>
+                            Completar
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )
+              })}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
+
+      {/* New Task Form Modal */}
+      {showNewTaskForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <Card className="w-full max-w-md">
+            <CardHeader>
+              <CardTitle>Nueva Tarea</CardTitle>
+              <CardDescription>Crear una nueva tarea manual</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <label className="text-sm font-medium">Título</label>
                 <Input
                   value={newTask.title}
-                  onChange={(e) => setNewTask((prev) => ({ ...prev, title: e.target.value }))}
+                  onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
                   placeholder="Título de la tarea"
                 />
               </div>
 
-              <div className="md:col-span-2">
-                <Label>Descripción</Label>
-                <Textarea
+              <div>
+                <label className="text-sm font-medium">Descripción</label>
+                <Input
                   value={newTask.description}
-                  onChange={(e) => setNewTask((prev) => ({ ...prev, description: e.target.value }))}
-                  placeholder="Descripción detallada de la tarea"
+                  onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
+                  placeholder="Descripción de la tarea"
                 />
               </div>
 
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium">Categoría</label>
+                  <Select
+                    value={newTask.category}
+                    onValueChange={(value) => setNewTask({ ...newTask, category: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="General">General</SelectItem>
+                      <SelectItem value="Venue Management">Venue Management</SelectItem>
+                      <SelectItem value="Technical Production">Technical Production</SelectItem>
+                      <SelectItem value="Catering & Logistics">Catering & Logistics</SelectItem>
+                      <SelectItem value="Security & Safety">Security & Safety</SelectItem>
+                      <SelectItem value="Marketing & Promotion">Marketing & Promotion</SelectItem>
+                      <SelectItem value="Financial Management">Financial Management</SelectItem>
+                      <SelectItem value="Artistic Direction">Artistic Direction</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">Prioridad</label>
+                  <Select
+                    value={newTask.priority}
+                    onValueChange={(value: any) => setNewTask({ ...newTask, priority: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="low">Baja</SelectItem>
+                      <SelectItem value="medium">Media</SelectItem>
+                      <SelectItem value="high">Alta</SelectItem>
+                      <SelectItem value="urgent">Urgente</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium">Fecha de vencimiento</label>
+                  <Input
+                    type="date"
+                    value={newTask.dueDate}
+                    onChange={(e) => setNewTask({ ...newTask, dueDate: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-sm font-medium">Horas estimadas</label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={newTask.estimatedHours}
+                    onChange={(e) => setNewTask({ ...newTask, estimatedHours: Number.parseInt(e.target.value) || 1 })}
+                  />
+                </div>
+              </div>
+
               <div>
-                <Label>Prioridad</Label>
-                <Select
-                  value={newTask.priority}
-                  onValueChange={(value: "low" | "medium" | "high") =>
-                    setNewTask((prev) => ({ ...prev, priority: value }))
-                  }
-                >
+                <label className="text-sm font-medium">Evento</label>
+                <Select value={newTask.eventId} onValueChange={(value) => setNewTask({ ...newTask, eventId: value })}>
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder="Seleccionar evento" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="low">Baja</SelectItem>
-                    <SelectItem value="medium">Media</SelectItem>
-                    <SelectItem value="high">Alta</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label>Asignado a</Label>
-                <Input
-                  value={newTask.assignee}
-                  onChange={(e) => setNewTask((prev) => ({ ...prev, assignee: e.target.value }))}
-                />
-              </div>
-
-              <div>
-                <Label>Fecha de vencimiento *</Label>
-                <Input
-                  type="date"
-                  value={newTask.dueDate}
-                  onChange={(e) => setNewTask((prev) => ({ ...prev, dueDate: e.target.value }))}
-                />
-              </div>
-
-              <div>
-                <Label>Categoría</Label>
-                <Input
-                  value={newTask.category}
-                  onChange={(e) => setNewTask((prev) => ({ ...prev, category: e.target.value }))}
-                  placeholder="Ej: Producción, Logística, etc."
-                />
-              </div>
-
-              <div className="md:col-span-2">
-                <Label>Evento relacionado</Label>
-                <Select
-                  value={newTask.eventId}
-                  onValueChange={(value) => setNewTask((prev) => ({ ...prev, eventId: value }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Sin evento asociado</SelectItem>
                     {events.map((event) => (
                       <SelectItem key={event.id} value={event.id}>
-                        {event.venue} - {new Date(event.date).toLocaleDateString("es-AR")}
+                        {event.title}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-            </div>
 
-            <div className="flex justify-end space-x-2 mt-6">
-              <Button variant="outline" onClick={() => setShowAddForm(false)}>
+              <div>
+                <label className="text-sm font-medium">Asignado a (opcional)</label>
+                <Input
+                  value={newTask.assignee}
+                  onChange={(e) => setNewTask({ ...newTask, assignee: e.target.value })}
+                  placeholder="Nombre del responsable"
+                />
+              </div>
+            </CardContent>
+            <div className="flex justify-end gap-2 p-6 pt-0">
+              <Button variant="outline" onClick={() => setShowNewTaskForm(false)}>
                 Cancelar
               </Button>
-              <Button onClick={handleAddTask}>Crear Tarea</Button>
+              <Button onClick={handleCreateTask}>Crear Tarea</Button>
             </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Modal de edición */}
-      <Dialog open={editingTask !== null} onOpenChange={() => setEditingTask(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Editar Tarea</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div>
-              <Label>Título *</Label>
-              <Input
-                value={editTask.title}
-                onChange={(e) => setEditTask((prev) => ({ ...prev, title: e.target.value }))}
-                placeholder="Título de la tarea"
-              />
-            </div>
-
-            <div>
-              <Label>Descripción</Label>
-              <Textarea
-                value={editTask.description}
-                onChange={(e) => setEditTask((prev) => ({ ...prev, description: e.target.value }))}
-                placeholder="Descripción detallada de la tarea"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Prioridad</Label>
-                <Select
-                  value={editTask.priority}
-                  onValueChange={(value: "low" | "medium" | "high") =>
-                    setEditTask((prev) => ({ ...prev, priority: value }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Baja</SelectItem>
-                    <SelectItem value="medium">Media</SelectItem>
-                    <SelectItem value="high">Alta</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div>
-                <Label>Estado</Label>
-                <Select
-                  value={editTask.status}
-                  onValueChange={(value: "pending" | "in-progress" | "completed") =>
-                    setEditTask((prev) => ({ ...prev, status: value }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="pending">Pendiente</SelectItem>
-                    <SelectItem value="in-progress">En progreso</SelectItem>
-                    <SelectItem value="completed">Completada</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label>Asignado a</Label>
-                <Input
-                  value={editTask.assignee}
-                  onChange={(e) => setEditTask((prev) => ({ ...prev, assignee: e.target.value }))}
-                />
-              </div>
-
-              <div>
-                <Label>Fecha de vencimiento *</Label>
-                <Input
-                  type="date"
-                  value={editTask.dueDate}
-                  onChange={(e) => setEditTask((prev) => ({ ...prev, dueDate: e.target.value }))}
-                />
-              </div>
-            </div>
-
-            <div>
-              <Label>Categoría</Label>
-              <Input
-                value={editTask.category}
-                onChange={(e) => setEditTask((prev) => ({ ...prev, category: e.target.value }))}
-                placeholder="Ej: Producción, Logística, etc."
-              />
-            </div>
-
-            <div>
-              <Label>Evento relacionado</Label>
-              <Select
-                value={editTask.eventId}
-                onValueChange={(value) => setEditTask((prev) => ({ ...prev, eventId: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Sin evento asociado</SelectItem>
-                  {events.map((event) => (
-                    <SelectItem key={event.id} value={event.id}>
-                      {event.venue} - {new Date(event.date).toLocaleDateString("es-AR")}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="flex justify-end space-x-2">
-            <Button variant="outline" onClick={() => setEditingTask(null)}>
-              Cancelar
-            </Button>
-            <Button onClick={handleSaveEdit}>Guardar Cambios</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Lista de tareas */}
-      <div className="space-y-4">
-        {filteredTasks.length > 0 ? (
-          filteredTasks.map((task) => {
-            const relatedEvent = events.find((e) => e.id === task.eventId)
-            const overdue = isOverdue(task.dueDate)
-
-            return (
-              <Card
-                key={task.id}
-                className={`${overdue && task.status !== "completed" ? "border-red-200 bg-red-50" : ""}`}
-              >
-                <CardContent className="p-6">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        {getStatusIcon(task.status)}
-                        <h3 className="text-lg font-semibold">{task.title}</h3>
-                        <Badge className={getPriorityColor(task.priority)}>
-                          {task.priority === "high" ? "Alta" : task.priority === "medium" ? "Media" : "Baja"}
-                        </Badge>
-                        <Badge className={getStatusColor(task.status)}>
-                          {task.status === "completed"
-                            ? "Completada"
-                            : task.status === "in-progress"
-                              ? "En progreso"
-                              : "Pendiente"}
-                        </Badge>
-                        {task.isAutomated && (
-                          <Badge variant="outline" className="bg-purple-50 text-purple-700">
-                            🤖 Automática
-                          </Badge>
-                        )}
-                        {overdue && task.status !== "completed" && <Badge variant="destructive">Vencida</Badge>}
-                      </div>
-
-                      {task.description && <p className="text-gray-600 mb-3">{task.description}</p>}
-
-                      <div className="flex items-center gap-4 text-sm text-gray-500">
-                        <div className="flex items-center gap-1">
-                          <User className="w-4 h-4" />
-                          {task.assignee}
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Calendar className="w-4 h-4" />
-                          {new Date(task.dueDate).toLocaleDateString("es-AR")}
-                        </div>
-                        {relatedEvent && (
-                          <div className="flex items-center gap-1">
-                            <Calendar className="w-4 h-4" />
-                            {relatedEvent.venue}
-                          </div>
-                        )}
-                        {task.category && (
-                          <Badge variant="outline" className="text-xs">
-                            {task.category}
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      {/* Botones de cambio de estado */}
-                      {task.status === "pending" && (
-                        <Button size="sm" variant="outline" onClick={() => handleStatusChange(task.id, "in-progress")}>
-                          <Play className="w-4 h-4 mr-1" />
-                          Iniciar
-                        </Button>
-                      )}
-
-                      {task.status === "in-progress" && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleStatusChange(task.id, "completed")}
-                          className="text-green-600 border-green-600 hover:bg-green-50"
-                        >
-                          <CheckCircle className="w-4 h-4 mr-1" />
-                          Completar
-                        </Button>
-                      )}
-
-                      {task.status === "completed" && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleStatusChange(task.id, "pending")}
-                          className="text-orange-600 border-orange-600 hover:bg-orange-50"
-                        >
-                          <Square className="w-4 h-4 mr-1" />
-                          Reabrir
-                        </Button>
-                      )}
-
-                      <Button size="sm" variant="outline" onClick={() => handleEditTask(task)}>
-                        <Edit className="w-4 h-4" />
-                      </Button>
-
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          if (confirm("¿Eliminar esta tarea?")) {
-                            deleteTask(task.id)
-                            toast({
-                              title: "Tarea eliminada",
-                              description: "La tarea ha sido eliminada",
-                            })
-                          }
-                        }}
-                        className="text-red-600"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )
-          })
-        ) : (
-          <Card>
-            <CardContent className="p-12 text-center">
-              <CheckCircle className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No hay tareas</h3>
-              <p className="text-gray-600 mb-4">
-                {filterStatus !== "all" || filterPriority !== "all" || filterType !== "all" || searchQuery
-                  ? "No hay tareas que coincidan con los filtros seleccionados"
-                  : "Crea tu primera tarea para comenzar"}
-              </p>
-              {(filterStatus !== "all" || filterPriority !== "all" || filterType !== "all" || searchQuery) && (
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setFilterStatus("all")
-                    setFilterPriority("all")
-                    setFilterType("all")
-                    setSearchQuery("")
-                  }}
-                >
-                  Limpiar filtros
-                </Button>
-              )}
-            </CardContent>
           </Card>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }
