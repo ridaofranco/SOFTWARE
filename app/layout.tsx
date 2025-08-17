@@ -1,28 +1,40 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Inter } from "next/font/google"
+import { GeistSans } from "geist/font/sans"
+import { GeistMono } from "geist/font/mono"
 import "./globals.css"
-import { ThemeProvider } from "@/components/theme-provider"
+import { MainNav } from "@/components/layout/main-nav"
+import { Inter } from "next/font/google"
 
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Club de la Serpiente - Gestión de Eventos",
-  description: "Sistema de gestión de eventos para Club de la Serpiente",
-    generator: 'v0.dev'
+  title: "DER Event Management - Sistema Integral de Gestión de Eventos",
+  description: "Plataforma completa para la gestión de eventos, proveedores, contratos y más",
+    generator: 'v0.app'
 }
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode
-}>) {
+}) {
   return (
-    <html lang="es" suppressHydrationWarning>
+    <html lang="es">
+      <head>
+        <style>{`
+html {
+  font-family: ${GeistSans.style.fontFamily};
+  --font-sans: ${GeistSans.variable};
+  --font-mono: ${GeistMono.variable};
+}
+        `}</style>
+      </head>
       <body className={inter.className}>
-        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
-          {children}
-        </ThemeProvider>
+        <div className="min-h-screen bg-gray-50">
+          <MainNav />
+          <main className="relative">{children}</main>
+        </div>
       </body>
     </html>
   )
