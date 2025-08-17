@@ -1,7 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
-    appDir: true,
+    serverComponentsExternalPackages: ['luxon']
+  },
+  transpilePackages: ['luxon'],
+  webpack: (config) => {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+    }
+    return config
   },
   eslint: {
     ignoreDuringBuilds: true,
@@ -10,11 +17,7 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   images: {
-    domains: ['localhost'],
     unoptimized: true,
-  },
-  env: {
-    CUSTOM_KEY: 'my-value',
   },
 }
 

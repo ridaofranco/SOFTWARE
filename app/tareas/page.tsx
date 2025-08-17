@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useUnifiedEventStore } from "@/store/unified-event-store"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -12,7 +12,6 @@ import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Plus, Calendar, User, AlertTriangle, CheckCircle, Clock, Edit, Trash2, Play, Square } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { processAutomatedTasks } from "@/lib/automated-tasks-service"
 
 export default function TareasPage() {
   const { tasks, events, addTask, updateTask, deleteTask } = useUnifiedEventStore()
@@ -46,11 +45,6 @@ export default function TareasPage() {
     eventId: "",
     category: "",
   })
-
-  // Procesar tareas automáticas al cargar
-  useEffect(() => {
-    processAutomatedTasks()
-  }, [])
 
   // Filtrar tareas
   const filteredTasks = tasks.filter((task) => {
@@ -95,6 +89,8 @@ export default function TareasPage() {
       ...newTask,
       eventId: newTask.eventId === "none" ? undefined : newTask.eventId,
       isAutomated: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     }
 
     addTask(taskToAdd)
@@ -119,7 +115,10 @@ export default function TareasPage() {
   }
 
   const handleStatusChange = (taskId: string, newStatus: "pending" | "in-progress" | "completed") => {
-    updateTask(taskId, { status: newStatus })
+    updateTask(taskId, {
+      status: newStatus,
+      updatedAt: new Date().toISOString(),
+    })
     toast({
       title: "Estado actualizado",
       description: "La tarea ha sido actualizada",
@@ -150,7 +149,10 @@ export default function TareasPage() {
       return
     }
 
-    updateTask(editingTask!, editTask)
+    updateTask(editingTask!, {
+      ...editTask,
+      updatedAt: new Date().toISOString(),
+    })
 
     toast({
       title: "Tarea actualizada",

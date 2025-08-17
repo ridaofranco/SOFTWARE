@@ -1,535 +1,525 @@
 import { DateTime } from "luxon"
 
-// Definir los venues que requieren tareas automáticas
-const INTERNATIONAL_VENUES = [
-  // Uruguay
-  "Montevideo",
-  "Punta del Este",
-
-  // Ecuador
-  "Cuenca",
-  "Quito",
-  "Guayaquil",
-
-  // Paraguay
-  "Asunción",
-
-  // Chile
-  "Santiago",
-  "Valparaiso",
-
-  // Brasil
-  "Sao Paulo",
-  "Rio de Janeiro",
-
-  // Bolivia
-  "La Paz",
-  "Santa Cruz",
-
-  // Peru
-  "Lima",
-  "Cusco",
-
-  // Colombia
-  "Bogota",
-  "Medellin",
-
-  // Venezuela
-  "Caracas",
-
-  // Mexico
-  "Ciudad de Mexico",
-  "Guadalajara",
-
-  // USA
-  "Miami",
-  "New York",
-
-  // Spain
-  "Madrid",
-  "Barcelona",
-]
-
-const ARGENTINA_VENUES = [
-  "Normandina",
-  "Stadium",
-  "Gap",
-  "Córdoba",
-  "Rosario",
-  "Mendoza",
-  "Quilmes",
-  "Capital Federal",
-  "Buenos Aires",
-]
-
-// Fecha límite para generar tareas automáticas
-const AUTOMATION_START_DATE = new Date("2025-08-15")
-
-// Tipos de tareas automáticas con sus configuraciones
-const AUTOMATED_TASK_TYPES = [
-  {
-    id: "pasajes",
-    title: "🛫 Gestionar Pasajes",
-    description: "Coordinar y confirmar pasajes aéreos para el equipo",
-    daysToComplete: 7,
-    priority: "high" as const,
-    category: "Logística Internacional",
-    forInternational: true,
-    forArgentina: true,
-  },
-  {
-    id: "hoteleria",
-    title: "🏨 Reservar Hotelería",
-    description: "Confirmar alojamiento para todo el equipo",
-    daysToComplete: 10,
-    priority: "high" as const,
-    category: "Logística Internacional",
-    forInternational: true,
-    forArgentina: true,
-  },
-  {
-    id: "aduana_ida",
-    title: "📋 Trámites Aduana IDA",
-    description: "Preparar documentación y trámites aduaneros de ida",
-    daysToComplete: 14,
-    priority: "medium" as const,
-    category: "Documentación Internacional",
-    forInternational: true,
-    forArgentina: false,
-  },
-  {
-    id: "aduana_vuelta",
-    title: "📋 Trámites Aduana VUELTA",
-    description: "Preparar documentación y trámites aduaneros de vuelta",
-    daysToComplete: 21,
-    priority: "medium" as const,
-    category: "Documentación Internacional",
-    forInternational: true,
-    forArgentina: false,
-  },
-]
-
-// Función para determinar si un venue es internacional
-function isInternationalVenue(venue: string): boolean {
-  return INTERNATIONAL_VENUES.some((intlVenue) => venue.toLowerCase().includes(intlVenue.toLowerCase()))
-}
-
-// Función para determinar si un venue es de Argentina
-function isArgentinaVenue(venue: string): boolean {
-  return ARGENTINA_VENUES.some((argVenue) => venue.toLowerCase().includes(argVenue.toLowerCase()))
-}
-
-// Función para determinar si un evento requiere automatización
-function requiresAutomation(venue: string): boolean {
-  return isInternationalVenue(venue) || isArgentinaVenue(venue)
-}
-
-// Función para obtener el país basado en el venue (EXPORTED)
-export function getCountryFromVenue(venue: string, address?: string): string {
-  const venueText = `${venue} ${address || ""}`.toLowerCase()
-
-  if (venueText.includes("uruguay") || venueText.includes("montevideo") || venueText.includes("punta del este")) {
-    return "Uruguay"
-  }
-  if (venueText.includes("chile") || venueText.includes("santiago") || venueText.includes("valparaiso")) {
-    return "Chile"
-  }
-  if (
-    venueText.includes("brasil") ||
-    venueText.includes("brazil") ||
-    venueText.includes("sao paulo") ||
-    venueText.includes("rio de janeiro")
-  ) {
-    return "Brasil"
-  }
-  if (venueText.includes("paraguay") || venueText.includes("asuncion")) {
-    return "Paraguay"
-  }
-  if (venueText.includes("bolivia") || venueText.includes("la paz") || venueText.includes("santa cruz")) {
-    return "Bolivia"
-  }
-  if (venueText.includes("peru") || venueText.includes("lima") || venueText.includes("cusco")) {
-    return "Peru"
-  }
-  if (venueText.includes("colombia") || venueText.includes("bogota") || venueText.includes("medellin")) {
-    return "Colombia"
-  }
-  if (venueText.includes("ecuador") || venueText.includes("quito") || venueText.includes("guayaquil")) {
-    return "Ecuador"
-  }
-  if (venueText.includes("venezuela") || venueText.includes("caracas")) {
-    return "Venezuela"
-  }
-  if (venueText.includes("mexico") || venueText.includes("ciudad de mexico") || venueText.includes("guadalajara")) {
-    return "Mexico"
-  }
-  if (
-    venueText.includes("usa") ||
-    venueText.includes("united states") ||
-    venueText.includes("miami") ||
-    venueText.includes("new york")
-  ) {
-    return "USA"
-  }
-  if (
-    venueText.includes("spain") ||
-    venueText.includes("españa") ||
-    venueText.includes("madrid") ||
-    venueText.includes("barcelona")
-  ) {
-    return "Spain"
-  }
-
-  return "Argentina" // Default
-}
-
-// Función para calcular días hasta el evento (EXPORTED)
-export function calculateDaysUntilEvent(eventDate: string): number {
-  const now = DateTime.now().setZone("America/Argentina/Buenos_Aires")
-  const event = DateTime.fromISO(eventDate).setZone("America/Argentina/Buenos_Aires")
-  return Math.ceil(event.diff(now, "days").days)
-}
-
-// Función para determinar si requiere trámites aduaneros (EXPORTED)
-export function requiresCustoms(venue: string, address?: string): boolean {
-  const country = getCountryFromVenue(venue, address)
-  return country !== "Argentina"
-}
-
-// Interface para tareas automáticas
+// Types
 export interface AutomatedTask {
   id: string
   title: string
   description: string
   category: string
-  priority: "low" | "medium" | "high"
-  daysBeforeEvent: number
+  priority: "high" | "medium" | "low"
+  status: "pending" | "in-progress" | "completed" | "cancelled"
   assignee: string
+  dueDate: string
+  estimatedHours: number
   isAutomated: boolean
   eventId: string
-  status: "pending" | "in-progress" | "completed"
-  dueDate: string
   createdAt: string
+  updatedAt: string
+  questions?: string[]
+  requiresInternational?: boolean
 }
 
-// Interface for Event
-export interface Event {
+export interface TaskTemplate {
   id: string
-  title?: string
-  venue: string
-  date: string
-  address?: string
-  status: string
-}
-
-// Interface for Task
-export interface Task {
-  id: string
-  eventId: string
   title: string
   description: string
   category: string
-  priority: "low" | "medium" | "high"
-  status: "pending" | "in-progress" | "completed"
+  priority: "high" | "medium" | "low"
   assignee: string
-  dueDate: string
-  isAutomated?: boolean
+  daysBeforeEvent: number
+  estimatedHours: number
+  questions?: string[]
+  requiresInternational?: boolean
 }
 
-// Función principal para procesar tareas automáticas
-export function processAutomatedTasks(): void {
-  // Esta función necesita acceso al store, pero para evitar dependencias circulares
-  // se implementará en el componente que la use
-  console.log("processAutomatedTasks called - implement in component")
+export interface TaskStats {
+  totalAutomatedTasks: number
+  completedAutomatedTasks: number
+  pendingAutomatedTasks: number
+  upcomingEvents: number
 }
 
-// Función para obtener tareas automáticas de un evento específico
-export function getAutomatedTasksForEvent(eventId: string, tasks: Task[] = []): AutomatedTask[] {
-  return tasks.filter((task) => task.eventId === eventId && task.isAutomated) || []
+// Standard Task Templates
+export const STANDARD_TASK_TEMPLATES: TaskTemplate[] = [
+  // Venue Management
+  {
+    id: "venue-booking",
+    title: "Confirmar reserva del venue",
+    description: "Verificar disponibilidad y confirmar la reserva del venue para la fecha del evento",
+    category: "Venue Management",
+    priority: "high",
+    assignee: "Coordinador de Venue",
+    daysBeforeEvent: 30,
+    estimatedHours: 2,
+    questions: ["¿El venue está disponible?", "¿Se firmó el contrato?", "¿Se pagó el depósito?"],
+  },
+  {
+    id: "venue-setup",
+    title: "Coordinar montaje del venue",
+    description: "Planificar y coordinar el setup del venue incluyendo decoración y equipamiento",
+    category: "Venue Management",
+    priority: "high",
+    assignee: "Coordinador de Venue",
+    daysBeforeEvent: 7,
+    estimatedHours: 4,
+    questions: ["¿Está definido el layout?", "¿Se coordinó el acceso?", "¿Están los permisos listos?"],
+  },
+  {
+    id: "venue-cleanup",
+    title: "Organizar limpieza post-evento",
+    description: "Coordinar la limpieza y desmontaje del venue después del evento",
+    category: "Venue Management",
+    priority: "medium",
+    assignee: "Coordinador de Venue",
+    daysBeforeEvent: -1,
+    estimatedHours: 3,
+  },
+
+  // Technical Production
+  {
+    id: "sound-setup",
+    title: "Configurar sistema de sonido",
+    description: "Instalar y probar el sistema de sonido para el evento",
+    category: "Technical Production",
+    priority: "high",
+    assignee: "Técnico de Sonido",
+    daysBeforeEvent: 1,
+    estimatedHours: 4,
+    questions: ["¿Se probó el sistema?", "¿Hay backup disponible?", "¿Se hizo soundcheck?"],
+  },
+  {
+    id: "lighting-setup",
+    title: "Configurar iluminación",
+    description: "Instalar y programar el sistema de iluminación del evento",
+    category: "Technical Production",
+    priority: "high",
+    assignee: "Técnico de Luces",
+    daysBeforeEvent: 1,
+    estimatedHours: 3,
+    questions: ["¿Está programada la secuencia?", "¿Se probaron todos los efectos?"],
+  },
+  {
+    id: "equipment-check",
+    title: "Verificar equipamiento técnico",
+    description: "Revisar y probar todo el equipamiento técnico necesario",
+    category: "Technical Production",
+    priority: "medium",
+    assignee: "Técnico General",
+    daysBeforeEvent: 2,
+    estimatedHours: 2,
+  },
+
+  // Catering & Logistics
+  {
+    id: "catering-menu",
+    title: "Finalizar menú de catering",
+    description: "Confirmar el menú final con el proveedor de catering",
+    category: "Catering & Logistics",
+    priority: "medium",
+    assignee: "Coordinador de Catering",
+    daysBeforeEvent: 14,
+    estimatedHours: 2,
+    questions: ["¿Se confirmaron las restricciones alimentarias?", "¿Está definida la cantidad?"],
+  },
+  {
+    id: "transportation",
+    title: "Coordinar transporte",
+    description: "Organizar el transporte para artistas y equipo técnico",
+    category: "Catering & Logistics",
+    priority: "medium",
+    assignee: "Coordinador de Logística",
+    daysBeforeEvent: 7,
+    estimatedHours: 3,
+  },
+  {
+    id: "accommodation",
+    title: "Confirmar alojamiento",
+    description: "Verificar reservas de hotel para artistas y equipo",
+    category: "Catering & Logistics",
+    priority: "medium",
+    assignee: "Coordinador de Logística",
+    daysBeforeEvent: 14,
+    estimatedHours: 1,
+  },
+
+  // Security & Safety
+  {
+    id: "security-plan",
+    title: "Desarrollar plan de seguridad",
+    description: "Crear y revisar el plan de seguridad del evento",
+    category: "Security & Safety",
+    priority: "high",
+    assignee: "Jefe de Seguridad",
+    daysBeforeEvent: 21,
+    estimatedHours: 4,
+    questions: ["¿Se identificaron los riesgos?", "¿Está el personal capacitado?"],
+  },
+  {
+    id: "emergency-procedures",
+    title: "Establecer procedimientos de emergencia",
+    description: "Definir y comunicar los procedimientos de emergencia",
+    category: "Security & Safety",
+    priority: "high",
+    assignee: "Jefe de Seguridad",
+    daysBeforeEvent: 14,
+    estimatedHours: 2,
+  },
+
+  // Marketing & Promotion
+  {
+    id: "social-media",
+    title: "Campaña en redes sociales",
+    description: "Ejecutar la campaña de marketing en redes sociales",
+    category: "Marketing & Promotion",
+    priority: "medium",
+    assignee: "Community Manager",
+    daysBeforeEvent: 30,
+    estimatedHours: 10,
+  },
+  {
+    id: "press-release",
+    title: "Enviar comunicado de prensa",
+    description: "Redactar y enviar comunicado de prensa a medios",
+    category: "Marketing & Promotion",
+    priority: "medium",
+    assignee: "Responsable de Prensa",
+    daysBeforeEvent: 21,
+    estimatedHours: 3,
+  },
+
+  // Financial Management
+  {
+    id: "budget-review",
+    title: "Revisar presupuesto final",
+    description: "Hacer la revisión final del presupuesto del evento",
+    category: "Financial Management",
+    priority: "high",
+    assignee: "Administrador",
+    daysBeforeEvent: 7,
+    estimatedHours: 2,
+  },
+  {
+    id: "payment-processing",
+    title: "Procesar pagos pendientes",
+    description: "Gestionar todos los pagos pendientes a proveedores",
+    category: "Financial Management",
+    priority: "high",
+    assignee: "Administrador",
+    daysBeforeEvent: 3,
+    estimatedHours: 3,
+  },
+
+  // Artistic Direction
+  {
+    id: "rehearsal-schedule",
+    title: "Programar ensayos",
+    description: "Coordinar horarios de ensayo con todos los artistas",
+    category: "Artistic Direction",
+    priority: "high",
+    assignee: "Director Artístico",
+    daysBeforeEvent: 14,
+    estimatedHours: 2,
+  },
+  {
+    id: "artist-coordination",
+    title: "Coordinar con artistas",
+    description: "Mantener comunicación constante con todos los artistas",
+    category: "Artistic Direction",
+    priority: "medium",
+    assignee: "Director Artístico",
+    daysBeforeEvent: 7,
+    estimatedHours: 4,
+  },
+
+  // International Support
+  {
+    id: "visa-processing",
+    title: "Gestionar visas de artistas",
+    description: "Procesar y obtener visas necesarias para artistas internacionales",
+    category: "International Support",
+    priority: "high",
+    assignee: "Coordinador Internacional",
+    daysBeforeEvent: 60,
+    estimatedHours: 8,
+    requiresInternational: true,
+    questions: ["¿Se enviaron los documentos?", "¿Se pagaron las tasas?", "¿Hay seguimiento del proceso?"],
+  },
+  {
+    id: "customs-documentation",
+    title: "Preparar documentación aduanera",
+    description: "Preparar toda la documentación necesaria para equipos internacionales",
+    category: "International Support",
+    priority: "high",
+    assignee: "Coordinador Internacional",
+    daysBeforeEvent: 30,
+    estimatedHours: 4,
+    requiresInternational: true,
+  },
+  {
+    id: "international-coordination",
+    title: "Coordinar logística internacional",
+    description: "Gestionar todos los aspectos logísticos para elementos internacionales",
+    category: "International Support",
+    priority: "medium",
+    assignee: "Coordinador Internacional",
+    daysBeforeEvent: 21,
+    estimatedHours: 6,
+    requiresInternational: true,
+  },
+]
+
+// Utility Functions
+export function calculateDaysUntilEvent(eventDate: string): number {
+  const event = DateTime.fromISO(eventDate).setZone("America/Argentina/Buenos_Aires")
+  const now = DateTime.now().setZone("America/Argentina/Buenos_Aires")
+  return Math.ceil(event.diff(now, "days").days)
 }
 
-// Función para generar tareas automáticas (alias para compatibilidad)
-export function generateAutomatedTasks(event: Event): AutomatedTask[] {
-  const country = getCountryFromVenue(event.venue, event.address)
-  const isInternational = requiresCustoms(event.venue, event.address)
-  const daysUntilEvent = calculateDaysUntilEvent(event.date)
+export function requiresCustoms(venue: string): boolean {
+  if (!venue) return false
 
-  const baseTasks: Omit<AutomatedTask, "id" | "eventId" | "dueDate" | "createdAt">[] = [
-    // Logistics Tasks
-    {
-      title: "Confirmar transporte de equipos",
-      description: "Coordinar y confirmar el transporte de todos los equipos técnicos al venue",
-      category: "Logística",
-      priority: "high",
-      daysBeforeEvent: 7,
-      assignee: "Franco",
-      isAutomated: true,
-      status: "pending",
-    },
-    {
-      title: "Verificar accesos y horarios de carga",
-      description: "Confirmar horarios de carga/descarga y accesos al venue",
-      category: "Logística",
-      priority: "high",
-      daysBeforeEvent: 5,
-      assignee: "Franco",
-      isAutomated: true,
-      status: "pending",
-    },
-    {
-      title: "Preparar rider técnico",
-      description: "Enviar rider técnico completo al venue y proveedores",
-      category: "Técnico",
-      priority: "medium",
-      daysBeforeEvent: 10,
-      assignee: "Franco",
-      isAutomated: true,
-      status: "pending",
-    },
-
-    // Production Tasks
-    {
-      title: "Confirmar lineup final",
-      description: "Verificar y confirmar el lineup definitivo del evento",
-      category: "Producción",
-      priority: "high",
-      daysBeforeEvent: 14,
-      assignee: "Franco",
-      isAutomated: true,
-      status: "pending",
-    },
-    {
-      title: "Coordinar pruebas de sonido",
-      description: "Programar y coordinar las pruebas de sonido con todos los artistas",
-      category: "Técnico",
-      priority: "medium",
-      daysBeforeEvent: 3,
-      assignee: "Franco",
-      isAutomated: true,
-      status: "pending",
-    },
-
-    // Legal & Permits
-    {
-      title: "Verificar permisos municipales",
-      description: "Confirmar que todos los permisos municipales están en orden",
-      category: "Legal",
-      priority: "high",
-      daysBeforeEvent: 15,
-      assignee: "Franco",
-      isAutomated: true,
-      status: "pending",
-    },
-    {
-      title: "Revisar seguros del evento",
-      description: "Verificar cobertura de seguros para el evento y equipos",
-      category: "Legal",
-      priority: "medium",
-      daysBeforeEvent: 10,
-      assignee: "Franco",
-      isAutomated: true,
-      status: "pending",
-    },
-
-    // Marketing Tasks
-    {
-      title: "Lanzar campaña de marketing final",
-      description: "Activar la campaña de marketing de última semana",
-      category: "Marketing",
-      priority: "medium",
-      daysBeforeEvent: 7,
-      assignee: "Franco",
-      isAutomated: true,
-      status: "pending",
-    },
-    {
-      title: "Preparar material de prensa",
-      description: "Preparar kit de prensa y material para medios",
-      category: "Marketing",
-      priority: "low",
-      daysBeforeEvent: 14,
-      assignee: "Franco",
-      isAutomated: true,
-      status: "pending",
-    },
+  const internationalKeywords = [
+    "usa",
+    "europe",
+    "uk",
+    "spain",
+    "france",
+    "germany",
+    "italy",
+    "brazil",
+    "chile",
+    "colombia",
+    "mexico",
+    "miami",
+    "new york",
+    "london",
+    "madrid",
+    "barcelona",
+    "paris",
+    "berlin",
+    "rome",
+    "são paulo",
+    "santiago",
+    "bogotá",
+    "mexico city",
+    "international",
+    "world",
+    "global",
   ]
 
-  // Add international-specific tasks
-  if (isInternational) {
-    baseTasks.push(
-      {
-        title: "Gestionar documentación de aduana",
-        description: `Preparar documentación para aduana - Destino: ${country}`,
-        category: "Legal",
-        priority: "high",
-        daysBeforeEvent: 21,
-        assignee: "Franco",
-        isAutomated: true,
-        status: "pending",
-      },
-      {
-        title: "Coordinar transporte internacional",
-        description: `Organizar transporte de equipos a ${country}`,
-        category: "Logística",
-        priority: "high",
-        daysBeforeEvent: 14,
-        assignee: "Franco",
-        isAutomated: true,
-        status: "pending",
-      },
-      {
-        title: "Verificar requisitos de visa",
-        description: `Confirmar requisitos de visa para el equipo en ${country}`,
-        category: "Legal",
-        priority: "medium",
-        daysBeforeEvent: 30,
-        assignee: "Franco",
-        isAutomated: true,
-        status: "pending",
-      },
-    )
-  }
-
-  // Generate tasks with proper dates and IDs
-  return baseTasks.map((task, index) => {
-    const dueDate = DateTime.fromISO(event.date)
-      .setZone("America/Argentina/Buenos_Aires")
-      .minus({ days: task.daysBeforeEvent })
-      .toISODate()
-
-    return {
-      ...task,
-      id: `auto-${event.id}-${index}`,
-      eventId: event.id,
-      dueDate: dueDate || event.date,
-      createdAt: DateTime.now().setZone("America/Argentina/Buenos_Aires").toISODate() || new Date().toISOString(),
-    }
-  })
+  return internationalKeywords.some((keyword) => venue.toLowerCase().includes(keyword))
 }
 
-// Función para obtener estadísticas de tareas automáticas (EXPORTED)
-export function getAutomatedTasksStats(tasks: Task[] = [], events: Event[] = []) {
+export function getCountryFromVenue(venue: string): string {
+  if (!venue) return "Argentina"
+
+  const countryMap: Record<string, string> = {
+    usa: "Estados Unidos",
+    miami: "Estados Unidos",
+    "new york": "Estados Unidos",
+    europe: "Europa",
+    uk: "Reino Unido",
+    london: "Reino Unido",
+    spain: "España",
+    madrid: "España",
+    barcelona: "España",
+    france: "Francia",
+    paris: "Francia",
+    germany: "Alemania",
+    berlin: "Alemania",
+    italy: "Italia",
+    rome: "Italia",
+    brazil: "Brasil",
+    "são paulo": "Brasil",
+    chile: "Chile",
+    santiago: "Chile",
+    colombia: "Colombia",
+    bogotá: "Colombia",
+    mexico: "México",
+    "mexico city": "México",
+  }
+
+  const venueLower = venue.toLowerCase()
+  for (const [keyword, country] of Object.entries(countryMap)) {
+    if (venueLower.includes(keyword)) {
+      return country
+    }
+  }
+
+  return "Argentina"
+}
+
+export function generateAutomatedTasks(event: any): AutomatedTask[] {
+  const tasks: AutomatedTask[] = []
+  const eventDate = DateTime.fromISO(event.date).setZone("America/Argentina/Buenos_Aires")
+  const now = DateTime.now().setZone("America/Argentina/Buenos_Aires")
+  const isInternational = requiresCustoms(event.venue || "")
+
+  // Filter templates based on event requirements
+  const applicableTemplates = STANDARD_TASK_TEMPLATES.filter((template) => {
+    if (template.requiresInternational && !isInternational) {
+      return false
+    }
+    return true
+  })
+
+  // Generate tasks from templates
+  applicableTemplates.forEach((template, index) => {
+    const dueDate = eventDate.minus({ days: template.daysBeforeEvent })
+
+    const task: AutomatedTask = {
+      id: `auto-${event.id}-${template.id}-${index}`,
+      title: template.title,
+      description: template.description,
+      category: template.category,
+      priority: template.priority,
+      status: "pending",
+      assignee: template.assignee,
+      dueDate: dueDate.toISO()!,
+      estimatedHours: template.estimatedHours,
+      isAutomated: true,
+      eventId: event.id,
+      createdAt: now.toISO()!,
+      updatedAt: now.toISO()!,
+      questions: template.questions,
+      requiresInternational: template.requiresInternational,
+    }
+
+    tasks.push(task)
+  })
+
+  return tasks
+}
+
+export function getAutomatedTasksStats(tasks: any[], events?: any[]): TaskStats {
   const automatedTasks = tasks.filter((task) => task.isAutomated)
 
-  return {
-    total: automatedTasks.length,
-    pending: automatedTasks.filter((task) => task.status === "pending").length,
-    inProgress: automatedTasks.filter((task) => task.status === "in-progress").length,
-    completed: automatedTasks.filter((task) => task.status === "completed").length,
-    overdue: automatedTasks.filter((task) => {
-      const dueDate = DateTime.fromISO(task.dueDate).setZone("America/Argentina/Buenos_Aires")
-      const now = DateTime.now().setZone("America/Argentina/Buenos_Aires")
-      return task.status !== "completed" && dueDate < now
-    }).length,
+  const stats: TaskStats = {
+    totalAutomatedTasks: automatedTasks.length,
+    completedAutomatedTasks: automatedTasks.filter((task) => task.status === "completed").length,
+    pendingAutomatedTasks: automatedTasks.filter((task) => task.status === "pending").length,
+    upcomingEvents: 0,
   }
+
+  if (events) {
+    const now = DateTime.now().setZone("America/Argentina/Buenos_Aires")
+    stats.upcomingEvents = events.filter((event) => {
+      const eventDate = DateTime.fromISO(event.date).setZone("America/Argentina/Buenos_Aires")
+      return eventDate > now && eventDate <= now.plus({ days: 30 })
+    }).length
+  }
+
+  return stats
 }
 
-// Función para obtener eventos que requieren atención urgente (EXPORTED)
-export function getUrgentAutomatedEvents(tasks: Task[] = [], events: Event[] = []) {
+export function getUrgentAutomatedEvents(events: any[], tasks: any[]): any[] {
   const now = DateTime.now().setZone("America/Argentina/Buenos_Aires")
 
-  return events.filter((event) => {
-    const eventDate = DateTime.fromISO(event.date).setZone("America/Argentina/Buenos_Aires")
-    const daysUntilEvent = eventDate.diff(now, "days").days
-
-    // Events in the next 30 days that don't have automated tasks yet
-    if (daysUntilEvent <= 30 && daysUntilEvent > 0) {
+  return events
+    .filter((event) => {
+      const eventDate = DateTime.fromISO(event.date).setZone("America/Argentina/Buenos_Aires")
+      const daysUntilEvent = eventDate.diff(now, "days").days
+      return daysUntilEvent > 0 && daysUntilEvent <= 30
+    })
+    .map((event) => {
       const eventTasks = tasks.filter((task) => task.eventId === event.id && task.isAutomated)
-      return eventTasks.length === 0
+      const pendingTasks = eventTasks.filter((task) => task.status === "pending").length
+      const daysUntilEvent = Math.ceil(DateTime.fromISO(event.date).diff(now, "days").days)
+
+      return {
+        id: event.id,
+        venue: event.venue,
+        country: getCountryFromVenue(event.venue || ""),
+        daysUntilEvent,
+        pendingTasks,
+        requiresAttention: pendingTasks > 0 && daysUntilEvent <= 14,
+      }
+    })
+    .filter((event) => event.requiresAttention)
+    .sort((a, b) => a.daysUntilEvent - b.daysUntilEvent)
+}
+
+// Process automated tasks - this is the missing function
+export function processAutomatedTasks(): void {
+  // This function would typically interact with the store
+  // For now, it's a placeholder that can be called without errors
+  console.log("Processing automated tasks...")
+
+  // In a real implementation, this would:
+  // 1. Get all events from the store
+  // 2. Check which events need automated tasks
+  // 3. Generate tasks for events that don't have them yet
+  // 4. Update overdue tasks
+  // 5. Send notifications for urgent tasks
+
+  // Since we can't access the store directly from here,
+  // this function serves as a placeholder for the import
+}
+
+// Additional utility functions for task management
+export function filterTasks(
+  tasks: any[],
+  filters: {
+    status?: string
+    priority?: string
+    category?: string
+    assignee?: string
+    eventId?: string
+    isAutomated?: boolean
+    search?: string
+  },
+): any[] {
+  return tasks.filter((task) => {
+    if (filters.status && task.status !== filters.status) return false
+    if (filters.priority && task.priority !== filters.priority) return false
+    if (filters.category && task.category !== filters.category) return false
+    if (filters.assignee && task.assignee !== filters.assignee) return false
+    if (filters.eventId && task.eventId !== filters.eventId) return false
+    if (filters.isAutomated !== undefined && task.isAutomated !== filters.isAutomated) return false
+
+    if (filters.search) {
+      const searchLower = filters.search.toLowerCase()
+      const matchesTitle = task.title.toLowerCase().includes(searchLower)
+      const matchesDescription = task.description.toLowerCase().includes(searchLower)
+      const matchesCategory = task.category.toLowerCase().includes(searchLower)
+
+      if (!matchesTitle && !matchesDescription && !matchesCategory) return false
     }
 
-    return false
+    return true
   })
 }
 
-// Función para verificar si un evento necesita tareas automáticas (EXPORTED)
-export function eventNeedsAutomation(venue: string, eventDate: string): boolean {
-  const daysUntilEvent = calculateDaysUntilEvent(eventDate)
-  return requiresAutomation(venue) && daysUntilEvent > 15 && daysUntilEvent <= 60
+export function getTasksByCategory(tasks: any[]): Record<string, any[]> {
+  const tasksByCategory: Record<string, any[]> = {}
+
+  tasks.forEach((task) => {
+    if (!tasksByCategory[task.category]) {
+      tasksByCategory[task.category] = []
+    }
+    tasksByCategory[task.category].push(task)
+  })
+
+  return tasksByCategory
 }
 
-// Función para obtener el tipo de automatización requerida (EXPORTED)
-export function getAutomationRequirements(venue: string): {
-  needsPassages: boolean
-  needsHotel: boolean
-  needsCustoms: boolean
-  country: string
-} {
-  const isInternational = isInternationalVenue(venue)
-  const country = getCountryFromVenue(venue)
+export function getOverdueTasks(tasks: any[]): any[] {
+  const now = DateTime.now().setZone("America/Argentina/Buenos_Aires")
 
-  return {
-    needsPassages: isInternational || isArgentinaVenue(venue),
-    needsHotel: isInternational || isArgentinaVenue(venue),
-    needsCustoms: isInternational,
-    country,
-  }
+  return tasks.filter((task) => {
+    if (task.status === "completed" || !task.dueDate) return false
+    const dueDate = DateTime.fromISO(task.dueDate, { zone: "America/Argentina/Buenos_Aires" })
+    return dueDate < now
+  })
 }
 
-// Standard task templates by category
-export const STANDARD_TASK_TEMPLATES = {
-  Logística: [
-    {
-      title: "Confirmar transporte de equipos",
-      description: "Coordinar y confirmar el transporte de todos los equipos técnicos",
-      priority: "high" as const,
-      daysBeforeEvent: 7,
-      assignee: "Franco",
-    },
-    {
-      title: "Verificar accesos al venue",
-      description: "Confirmar horarios y accesos de carga/descarga",
-      priority: "high" as const,
-      daysBeforeEvent: 5,
-      assignee: "Franco",
-    },
-  ],
-  Técnico: [
-    {
-      title: "Preparar rider técnico",
-      description: "Enviar especificaciones técnicas completas",
-      priority: "medium" as const,
-      daysBeforeEvent: 10,
-      assignee: "Franco",
-    },
-    {
-      title: "Coordinar pruebas de sonido",
-      description: "Programar soundcheck con todos los artistas",
-      priority: "medium" as const,
-      daysBeforeEvent: 3,
-      assignee: "Franco",
-    },
-  ],
-  Legal: [
-    {
-      title: "Verificar permisos municipales",
-      description: "Confirmar todos los permisos están en orden",
-      priority: "high" as const,
-      daysBeforeEvent: 15,
-      assignee: "Franco",
-    },
-    {
-      title: "Revisar seguros del evento",
-      description: "Verificar cobertura de seguros",
-      priority: "medium" as const,
-      daysBeforeEvent: 10,
-      assignee: "Franco",
-    },
-  ],
-  Marketing: [
-    {
-      title: "Lanzar campaña final",
-      description: "Activar marketing de última semana",
-      priority: "medium" as const,
-      daysBeforeEvent: 7,
-      assignee: "Franco",
-    },
-    {
-      title: "Preparar kit de prensa",
-      description: "Material para medios y prensa",
-      priority: "low" as const,
-      daysBeforeEvent: 14,
-      assignee: "Franco",
-    },
-  ],
+export function getUpcomingTasks(tasks: any[], days = 7): any[] {
+  const now = DateTime.now().setZone("America/Argentina/Buenos_Aires")
+  const futureDate = now.plus({ days })
+
+  return tasks.filter((task) => {
+    if (task.status === "completed" || !task.dueDate) return false
+    const dueDate = DateTime.fromISO(task.dueDate, { zone: "America/Argentina/Buenos_Aires" })
+    return dueDate >= now && dueDate <= futureDate
+  })
 }

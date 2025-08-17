@@ -1,143 +1,290 @@
 "use client"
 
-import { useState } from "react"
-import { useUnifiedEventStore } from "@/store/unified-event-store"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useState, useMemo } from "react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import { Progress } from "@/components/ui/progress"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Plus, Search, Filter, Clock, CheckCircle, AlertTriangle, User, Calendar, Bot, Zap } from "lucide-react"
+import {
+  Search,
+  Filter,
+  Calendar,
+  User,
+  Clock,
+  CheckCircle2,
+  Circle,
+  PlayCircle,
+  XCircle,
+  AlertTriangle,
+  Bot,
+  Plus,
+  BarChart3,
+} from "lucide-react"
+import { useUnifiedEventStore } from "@/store/unified-event-store"
+import { InjectStandardTasks } from "@/components/inject-standard-tasks"
+import { getAutomatedTasksStats } from "@/lib/automated-tasks-service"
+import { DateTime } from "luxon"
 import { useToast } from "@/hooks/use-toast"
-import { InjectStandardTasks } from "./inject-standard-tasks"
 
 interface TasksListProps {
   eventId?: string
-  showEventFilter?: boolean
+  showAutomatedOnly?: boolean
+  className?: string
 }
 
-export default function TasksList({ eventId, showEventFilter = false }: TasksListProps) {
-  const { tasks, events, updateTask, deleteTask } = useUnifiedEventStore()
+export function TasksList({ eventId, showAutomatedOnly = false, className }: TasksListProps) {
+  const { tasks, updateTask, events } = useUnifiedEventStore()
   const { toast } = useToast()
-
   const [searchTerm, setSearchTerm] = useState("")
-  const [statusFilter, setStatusFilter] = useState("all")
-  const [priorityFilter, setPriorityFilter] = useState("all")
-  const [categoryFilter, setCategoryFilter] = useState("all")
-  const [assigneeFilter, setAssigneeFilter] = useState("all")
+  const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [priorityFilter, setPriorityFilter] = useState<string>("all")
+  const [categoryFilter, setCategoryFilter] = useState<string>("all")
+  const [assigneeFilter, setAssigneeFilter] = useState<string>("all")
+  const [automatedFilter, setAutomatedFilter] = useState<string>(showAutomatedOnly ? "automated" : "all")
   const [showInjectDialog, setShowInjectDialog] = useState(false)
 
-  // Filter tasks based on eventId if provided
-  const filteredTasks = tasks.filter((task) => {
-    if (eventId && task.eventId !== eventId) return false
+  // Filter tasks based on current filters
+  const filteredTasks = useMemo(() => {
+    let filtered = tasks
 
-    const matchesSearch =
-      task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      task.description.toLowerCase().includes(searchTerm.toLowerCase())
-    const matchesStatus = statusFilter === "all" || task.status === statusFilter
-    const matchesPriority = priorityFilter === "all" || task.priority === priorityFilter
-    const matchesCategory = categoryFilter === "all" || task.category === categoryFilter
-    const matchesAssignee = assigneeFilter === "all" || task.assignee === assigneeFilter
+    // Filter by event if specified
+    if (eventId) {
+      filtered = filtered.filter((task) => task.eventId === eventId)
+    }
 
-    return matchesSearch && matchesStatus && matchesPriority && matchesCategory && matchesAssignee
-  })
+    // Filter by search term
+    if (searchTerm) {
+      filtered = filtered.filter(
+        (task) =>
+          task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          task.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          task.category.toLowerCase().includes(searchTerm.toLowerCase()),
+      )
+    }
+
+    // Filter by status
+    if (statusFilter !== "all") {
+      filtered = filtered.filter((task) => task.status === statusFilter)
+    }
+
+    // Filter by priority
+    if (priorityFilter !== "all") {
+      filtered = filtered.filter((task) => task.priority === priorityFilter)
+    }
+
+    // Filter by category
+    if (categoryFilter !== "all") {
+      filtered = filtered.filter((task) => task.category === categoryFilter)
+    }
+
+    // Filter by assignee
+    if (assigneeFilter !== "all") {
+      filtered = filtered.filter((task) => task.assignee === assigneeFilter)
+    }
+
+    // Filter by automated
+    if (automatedFilter === "automated") {
+      filtered = filtered.filter((task) => task.isAutomated)
+    } else if (automatedFilter === "manual") {
+      filtered = filtered.filter((task) => !task.isAutomated)
+    }
+
+    return filtered.sort((a, b) => {
+      // Sort by due date, then by priority
+      if (a.dueDate && b.dueDate) {
+        const dateA = DateTime.fromISO(a.dueDate)
+        const dateB = DateTime.fromISO(b.dueDate)
+        const dateDiff = dateA.toMillis() - dateB.toMillis()
+        if (dateDiff !== 0) return dateDiff
+      }
+
+      const priorityOrder = { high: 0, medium: 1, low: 2 }
+      return priorityOrder[a.priority] - priorityOrder[b.priority]
+    })
+  }, [tasks, eventId, searchTerm, statusFilter, priorityFilter, categoryFilter, assigneeFilter, automatedFilter])
+
+  // Get unique values for filters
+  const categories = useMemo(() => {
+    const cats = [...new Set(tasks.map((task) => task.category))].filter(Boolean)
+    return cats.sort()
+  }, [tasks])
+
+  const assignees = useMemo(() => {
+    const assigns = [...new Set(tasks.map((task) => task.assignee))].filter(Boolean)
+    return assigns.sort()
+  }, [tasks])
+
+  // Calculate statistics
+  const stats = useMemo(() => {
+    return getAutomatedTasksStats(filteredTasks, events)
+  }, [filteredTasks, events])
+
+  const overdueTasks = useMemo(() => {
+    return filteredTasks.filter((task) => {
+      if (task.status === "completed" || !task.dueDate) return false
+      const dueDate = DateTime.fromISO(task.dueDate, { zone: "America/Argentina/Buenos_Aires" })
+      const now = DateTime.now().setZone("America/Argentina/Buenos_Aires")
+      return dueDate < now
+    })
+  }, [filteredTasks])
 
   const handleStatusChange = (taskId: string, newStatus: string) => {
-    updateTask(taskId, { status: newStatus as any })
+    updateTask(taskId, {
+      status: newStatus as any,
+      updatedAt: DateTime.now().setZone("America/Argentina/Buenos_Aires").toISO(),
+    })
+
     toast({
       title: "Estado actualizado",
-      description: "El estado de la tarea ha sido actualizado",
+      description: `La tarea ha sido marcada como ${newStatus}`,
     })
   }
 
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "completed":
-        return <CheckCircle className="h-4 w-4 text-green-600" />
+        return <CheckCircle2 className="h-4 w-4 text-green-600" />
       case "in-progress":
-        return <Clock className="h-4 w-4 text-blue-600" />
+        return <PlayCircle className="h-4 w-4 text-blue-600" />
+      case "cancelled":
+        return <XCircle className="h-4 w-4 text-red-600" />
       default:
-        return <AlertTriangle className="h-4 w-4 text-orange-600" />
-    }
-  }
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "completed":
-        return "bg-green-100 text-green-800"
-      case "in-progress":
-        return "bg-blue-100 text-blue-800"
-      default:
-        return "bg-orange-100 text-orange-800"
+        return <Circle className="h-4 w-4 text-gray-400" />
     }
   }
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
       case "high":
-        return "bg-red-100 text-red-800"
+        return "destructive"
       case "medium":
-        return "bg-yellow-100 text-yellow-800"
+        return "default"
+      case "low":
+        return "secondary"
       default:
-        return "bg-gray-100 text-gray-800"
+        return "outline"
     }
   }
 
-  const getEventName = (eventId: string) => {
-    const event = events.find((e) => e.id === eventId)
-    return event ? event.title || event.venue : "Evento desconocido"
+  const isOverdue = (task: any) => {
+    if (task.status === "completed" || !task.dueDate) return false
+    const dueDate = DateTime.fromISO(task.dueDate, { zone: "America/Argentina/Buenos_Aires" })
+    const now = DateTime.now().setZone("America/Argentina/Buenos_Aires")
+    return dueDate < now
   }
 
-  // Get unique values for filters
-  const uniqueCategories = [...new Set(tasks.map((t) => t.category))]
-  const uniqueAssignees = [...new Set(tasks.map((t) => t.assignee))]
+  const formatDueDate = (dateString: string) => {
+    const date = DateTime.fromISO(dateString, { zone: "America/Argentina/Buenos_Aires" })
+    const now = DateTime.now().setZone("America/Argentina/Buenos_Aires")
+    const diff = date.diff(now, "days").days
+
+    if (Math.abs(diff) < 1) {
+      return "Hoy"
+    } else if (diff === 1) {
+      return "Mañana"
+    } else if (diff === -1) {
+      return "Ayer"
+    } else if (diff > 1 && diff <= 7) {
+      return `En ${Math.ceil(diff)} días`
+    } else if (diff < -1 && diff >= -7) {
+      return `Hace ${Math.abs(Math.floor(diff))} días`
+    } else {
+      return date.toFormat("dd/MM/yyyy")
+    }
+  }
+
+  const completionPercentage =
+    filteredTasks.length > 0
+      ? Math.round((filteredTasks.filter((t) => t.status === "completed").length / filteredTasks.length) * 100)
+      : 0
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold">{eventId ? "Tareas del Evento" : "Gestión de Tareas"}</h2>
-          <p className="text-gray-600">
-            {filteredTasks.length} tareas {eventId ? "para este evento" : "en total"}
-          </p>
-        </div>
-
-        <div className="flex gap-2">
-          <Button onClick={() => setShowInjectDialog(true)} variant="outline">
-            <Zap className="mr-2 h-4 w-4" />
-            Inyectar Tareas Estándar
-          </Button>
-          <Button>
-            <Plus className="mr-2 h-4 w-4" />
-            Nueva Tarea
-          </Button>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center">
-            <Filter className="mr-2 h-5 w-5" />
-            Filtros
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
-            <div className="lg:col-span-2">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Buscar tareas..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
+    <div className={`space-y-6 ${className}`}>
+      {/* Statistics Card */}
+      {filteredTasks.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <BarChart3 className="h-5 w-5" />
+              Estadísticas de Tareas
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-blue-600">{filteredTasks.length}</div>
+                <div className="text-xs text-muted-foreground">Total</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-green-600">
+                  {filteredTasks.filter((t) => t.status === "completed").length}
+                </div>
+                <div className="text-xs text-muted-foreground">Completadas</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-yellow-600">
+                  {filteredTasks.filter((t) => t.status === "in-progress").length}
+                </div>
+                <div className="text-xs text-muted-foreground">En progreso</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-gray-600">
+                  {filteredTasks.filter((t) => t.status === "pending").length}
+                </div>
+                <div className="text-xs text-muted-foreground">Pendientes</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-red-600">{overdueTasks.length}</div>
+                <div className="text-xs text-muted-foreground">Vencidas</div>
               </div>
             </div>
 
+            {filteredTasks.length > 0 && (
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span>Progreso general</span>
+                  <span>{completionPercentage}%</span>
+                </div>
+                <Progress value={completionPercentage} className="h-2" />
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Filters and Search */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <Filter className="h-5 w-5" />
+              Filtros y Búsqueda
+            </span>
+            {eventId && (
+              <Button onClick={() => setShowInjectDialog(true)} size="sm" variant="outline">
+                <Plus className="h-4 w-4 mr-2" />
+                Inyectar Tareas
+              </Button>
+            )}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Buscar tareas..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+
+          {/* Filter Row */}
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger>
                 <SelectValue placeholder="Estado" />
@@ -147,6 +294,7 @@ export default function TasksList({ eventId, showEventFilter = false }: TasksLis
                 <SelectItem value="pending">Pendiente</SelectItem>
                 <SelectItem value="in-progress">En progreso</SelectItem>
                 <SelectItem value="completed">Completada</SelectItem>
+                <SelectItem value="cancelled">Cancelada</SelectItem>
               </SelectContent>
             </Select>
 
@@ -168,7 +316,7 @@ export default function TasksList({ eventId, showEventFilter = false }: TasksLis
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todas las categorías</SelectItem>
-                {uniqueCategories.map((category) => (
+                {categories.map((category) => (
                   <SelectItem key={category} value={category}>
                     {category}
                   </SelectItem>
@@ -182,111 +330,166 @@ export default function TasksList({ eventId, showEventFilter = false }: TasksLis
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Todos los asignados</SelectItem>
-                {uniqueAssignees.map((assignee) => (
+                {assignees.map((assignee) => (
                   <SelectItem key={assignee} value={assignee}>
                     {assignee}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+
+            <Select value={automatedFilter} onValueChange={setAutomatedFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="Tipo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas las tareas</SelectItem>
+                <SelectItem value="automated">Automáticas</SelectItem>
+                <SelectItem value="manual">Manuales</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSearchTerm("")
+                setStatusFilter("all")
+                setPriorityFilter("all")
+                setCategoryFilter("all")
+                setAssigneeFilter("all")
+                setAutomatedFilter(showAutomatedOnly ? "automated" : "all")
+              }}
+            >
+              Limpiar
+            </Button>
           </div>
         </CardContent>
       </Card>
 
       {/* Tasks List */}
-      <div className="space-y-4">
-        {filteredTasks.length === 0 ? (
-          <Card>
-            <CardContent className="text-center py-12">
-              <AlertTriangle className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No hay tareas</h3>
-              <p className="text-gray-600 mb-4">
-                {searchTerm ||
-                statusFilter !== "all" ||
-                priorityFilter !== "all" ||
-                categoryFilter !== "all" ||
-                assigneeFilter !== "all"
-                  ? "No se encontraron tareas con los filtros aplicados"
-                  : "Aún no hay tareas creadas"}
-              </p>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Crear primera tarea
-              </Button>
-            </CardContent>
-          </Card>
-        ) : (
-          filteredTasks.map((task) => (
-            <Card key={task.id} className="hover:shadow-md transition-shadow">
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start space-x-4 flex-1">
-                    <Checkbox
-                      checked={task.status === "completed"}
-                      onCheckedChange={(checked) => handleStatusChange(task.id, checked ? "completed" : "pending")}
-                      className="mt-1"
-                    />
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center space-x-2 mb-2">
-                        {getStatusIcon(task.status)}
-                        <h3 className="font-medium text-lg">{task.title}</h3>
+      <Card>
+        <CardHeader>
+          <CardTitle>Lista de Tareas ({filteredTasks.length})</CardTitle>
+          <CardDescription>
+            {overdueTasks.length > 0 && (
+              <span className="text-red-600 flex items-center gap-1">
+                <AlertTriangle className="h-4 w-4" />
+                {overdueTasks.length} tarea{overdueTasks.length > 1 ? "s" : ""} vencida
+                {overdueTasks.length > 1 ? "s" : ""}
+              </span>
+            )}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {filteredTasks.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              No se encontraron tareas con los filtros aplicados
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {filteredTasks.map((task) => (
+                <div
+                  key={task.id}
+                  className={`p-4 border rounded-lg space-y-3 ${isOverdue(task) ? "border-red-200 bg-red-50" : ""}`}
+                >
+                  {/* Task Header */}
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 space-y-2">
+                      <div className="flex items-center gap-3">
+                        <Checkbox
+                          checked={task.status === "completed"}
+                          onCheckedChange={(checked) => {
+                            handleStatusChange(task.id, checked ? "completed" : "pending")
+                          }}
+                        />
+                        <h3
+                          className={`font-medium ${task.status === "completed" ? "line-through text-muted-foreground" : ""}`}
+                        >
+                          {task.title}
+                        </h3>
                         {task.isAutomated && (
-                          <Badge variant="outline" className="bg-purple-50 text-purple-700">
-                            <Bot className="w-3 h-3 mr-1" />
-                            Automática
+                          <Badge variant="outline" className="text-xs">
+                            <Bot className="h-3 w-3 mr-1" />
+                            Auto
+                          </Badge>
+                        )}
+                        <Badge variant={getPriorityColor(task.priority)} className="text-xs">
+                          {task.priority}
+                        </Badge>
+                        {isOverdue(task) && (
+                          <Badge variant="destructive" className="text-xs">
+                            <AlertTriangle className="h-3 w-3 mr-1" />
+                            Vencida
                           </Badge>
                         )}
                       </div>
-
-                      <p className="text-gray-600 mb-3">{task.description}</p>
-
-                      <div className="flex flex-wrap items-center gap-2 text-sm text-gray-500">
-                        <div className="flex items-center space-x-1">
-                          <Calendar className="h-4 w-4" />
-                          <span>Vence: {new Date(task.dueDate).toLocaleDateString("es-AR")}</span>
-                        </div>
-
-                        <div className="flex items-center space-x-1">
-                          <User className="h-4 w-4" />
-                          <span>{task.assignee}</span>
-                        </div>
-
-                        <Badge variant="outline">{task.category}</Badge>
-
-                        {showEventFilter && <Badge variant="secondary">{getEventName(task.eventId)}</Badge>}
-                      </div>
+                      <p className="text-sm text-muted-foreground">{task.description}</p>
                     </div>
-                  </div>
-
-                  <div className="flex items-center space-x-2 ml-4">
-                    <Badge className={getPriorityColor(task.priority)}>
-                      {task.priority === "high" ? "Alta" : task.priority === "medium" ? "Media" : "Baja"}
-                    </Badge>
 
                     <Select value={task.status} onValueChange={(value) => handleStatusChange(task.id, value)}>
                       <SelectTrigger className="w-32">
-                        <SelectValue />
+                        <div className="flex items-center gap-2">
+                          {getStatusIcon(task.status)}
+                          <SelectValue />
+                        </div>
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="pending">Pendiente</SelectItem>
                         <SelectItem value="in-progress">En progreso</SelectItem>
                         <SelectItem value="completed">Completada</SelectItem>
+                        <SelectItem value="cancelled">Cancelada</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
+
+                  {/* Task Details */}
+                  <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-1">
+                      <span className="font-medium">Categoría:</span>
+                      <Badge variant="secondary" className="text-xs">
+                        {task.category}
+                      </Badge>
+                    </div>
+
+                    {task.assignee && (
+                      <div className="flex items-center gap-1">
+                        <User className="h-4 w-4" />
+                        <span>{task.assignee}</span>
+                      </div>
+                    )}
+
+                    {task.dueDate && (
+                      <div className="flex items-center gap-1">
+                        <Calendar className="h-4 w-4" />
+                        <span className={isOverdue(task) ? "text-red-600 font-medium" : ""}>
+                          {formatDueDate(task.dueDate)}
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-1">
+                      <Clock className="h-4 w-4" />
+                      <span>
+                        Actualizada:{" "}
+                        {DateTime.fromISO(task.updatedAt || task.createdAt || new Date().toISOString()).toFormat(
+                          "dd/MM/yyyy HH:mm",
+                        )}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-              </CardContent>
-            </Card>
-          ))
-        )}
-      </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Inject Standard Tasks Dialog */}
-      {showInjectDialog && <InjectStandardTasks eventId={eventId} onClose={() => setShowInjectDialog(false)} />}
+      {showInjectDialog && eventId && (
+        <InjectStandardTasks eventId={eventId} onClose={() => setShowInjectDialog(false)} />
+      )}
     </div>
   )
 }
 
-// Named export for compatibility
-export { TasksList }
+export default TasksList

@@ -1,244 +1,226 @@
 "use client"
 
-import { useState } from "react"
-import { useUnifiedEventStore } from "@/store/unified-event-store"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Bot, Calendar, Clock, AlertTriangle, CheckCircle, Zap, Target, TrendingUp } from "lucide-react"
+import { Bot, Calendar, Users, MapPin, Clock, CheckCircle, AlertTriangle, TrendingUp, Zap, Globe } from "lucide-react"
+import { useUnifiedEventStore } from "@/store/unified-event-store"
 import {
   generateAutomatedTasks,
-  getAutomatedTasksStats,
-  getUrgentAutomatedEvents,
   calculateDaysUntilEvent,
+  getAutomatedTasksStats,
   requiresCustoms,
   getCountryFromVenue,
 } from "@/lib/automated-tasks-service"
-import { useToast } from "@/hooks/use-toast"
 
 interface AutomatedTasksWidgetProps {
-  eventId: string
+  eventId?: string
+  className?: string
 }
 
-export function AutomatedTasksWidget({ eventId }: AutomatedTasksWidgetProps) {
+export function AutomatedTasksWidget({ eventId, className }: AutomatedTasksWidgetProps) {
   const { events, tasks, addTask } = useUnifiedEventStore()
-  const { toast } = useToast()
   const [isGenerating, setIsGenerating] = useState(false)
+  const [stats, setStats] = useState<any>(null)
+  const [selectedEvent, setSelectedEvent] = useState<any>(null)
 
-  const event = events.find((e) => e.id === eventId)
-  if (!event) return null
+  useEffect(() => {
+    if (eventId) {
+      const event = events.find((e) => e.id === eventId)
+      setSelectedEvent(event || null)
+    }
+  }, [eventId, events])
 
-  const eventTasks = tasks.filter((t) => t.eventId === eventId)
-  const automatedTasks = eventTasks.filter((t) => t.isAutomated)
-  const stats = getAutomatedTasksStats(tasks, events)
-  const urgentEvents = getUrgentAutomatedEvents(tasks, events)
+  useEffect(() => {
+    const taskStats = getAutomatedTasksStats(tasks, events)
+    setStats(taskStats)
+  }, [tasks, events])
 
-  const daysUntilEvent = calculateDaysUntilEvent(event.date)
-  const isInternational = requiresCustoms(event.venue, event.address)
-  const country = getCountryFromVenue(event.venue, event.address)
+  const handleGenerateTasks = async () => {
+    if (!selectedEvent) return
 
-  const handleGenerateAutomatedTasks = async () => {
     setIsGenerating(true)
-
     try {
-      const newTasks = generateAutomatedTasks(event)
+      const newTasks = generateAutomatedTasks(selectedEvent)
 
-      // Add each task to the store
-      for (const task of newTasks) {
-        addTask({
-          id: task.id,
-          eventId: task.eventId,
-          title: task.title,
-          description: task.description,
-          category: task.category,
-          priority: task.priority,
-          status: task.status,
-          assignee: task.assignee,
-          dueDate: task.dueDate,
-          isAutomated: true,
-          createdAt: task.createdAt,
-        })
-      }
-
-      toast({
-        title: "¡Tareas automáticas generadas!",
-        description: `Se crearon ${newTasks.length} tareas automáticas para ${event.venue}`,
+      // Add tasks to store
+      newTasks.forEach((task) => {
+        addTask(task)
       })
+
+      // Update stats
+      const updatedStats = getAutomatedTasksStats([...tasks, ...newTasks], events)
+      setStats(updatedStats)
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "No se pudieron generar las tareas automáticas",
-        variant: "destructive",
-      })
+      console.error("Error generating tasks:", error)
     } finally {
       setIsGenerating(false)
     }
   }
 
+  const daysUntilEvent = selectedEvent ? calculateDaysUntilEvent(selectedEvent.date) : 0
+  const isInternational = selectedEvent ? requiresCustoms(selectedEvent.venue) : false
+  const eventCountry = selectedEvent ? getCountryFromVenue(selectedEvent.venue) : "Argentina"
+
+  const recentAutomatedTasks = tasks
+    .filter((task) => task.isAutomated && (!eventId || task.eventId === eventId))
+    .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+    .slice(0, 5)
+
   return (
-    <div className="space-y-6">
-      {/* Header Card */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Bot className="h-5 w-5 text-purple-600" />
-            <span>Asistente de Tareas Automáticas</span>
-          </CardTitle>
-          <CardDescription>
-            Sistema inteligente de generación de tareas basado en el tipo de evento y ubicación
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <div className="text-center p-4 bg-blue-50 rounded-lg">
-              <Calendar className="h-8 w-8 text-blue-600 mx-auto mb-2" />
-              <div className="text-2xl font-bold text-blue-600">{daysUntilEvent}</div>
-              <div className="text-sm text-gray-600">días hasta el evento</div>
-            </div>
-
-            <div className="text-center p-4 bg-green-50 rounded-lg">
-              <Target className="h-8 w-8 text-green-600 mx-auto mb-2" />
-              <div className="text-2xl font-bold text-green-600">{automatedTasks.length}</div>
-              <div className="text-sm text-gray-600">tareas automáticas</div>
-            </div>
-
-            <div className="text-center p-4 bg-purple-50 rounded-lg">
-              <TrendingUp className="h-8 w-8 text-purple-600 mx-auto mb-2" />
-              <div className="text-2xl font-bold text-purple-600">
-                {automatedTasks.filter((t) => t.status === "completed").length}
-              </div>
-              <div className="text-sm text-gray-600">completadas</div>
-            </div>
-          </div>
-
-          {/* Event Analysis */}
-          <div className="space-y-3 mb-6">
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-              <span className="font-medium">Tipo de evento:</span>
-              <Badge variant="outline">{isInternational ? "Internacional" : "Nacional"}</Badge>
-            </div>
-
-            {isInternational && (
-              <div className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
-                <span className="font-medium">País de destino:</span>
-                <Badge variant="outline" className="bg-orange-100 text-orange-800">
-                  {country}
-                </Badge>
-              </div>
-            )}
-
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-              <span className="font-medium">Requiere aduana:</span>
-              <Badge variant={isInternational ? "destructive" : "default"}>{isInternational ? "Sí" : "No"}</Badge>
-            </div>
-          </div>
-
-          {/* Action Button */}
-          {automatedTasks.length === 0 ? (
-            <Button onClick={handleGenerateAutomatedTasks} disabled={isGenerating} className="w-full" size="lg">
-              <Zap className="mr-2 h-4 w-4" />
-              {isGenerating ? "Generando tareas..." : "Generar Tareas Automáticas"}
-            </Button>
-          ) : (
-            <Alert>
-              <CheckCircle className="h-4 w-4" />
-              <AlertDescription>
-                Ya se generaron {automatedTasks.length} tareas automáticas para este evento.
-                {automatedTasks.filter((t) => t.status === "pending").length > 0 && (
-                  <span className="block mt-1 text-orange-600">
-                    {automatedTasks.filter((t) => t.status === "pending").length} tareas pendientes de completar.
-                  </span>
-                )}
-              </AlertDescription>
-            </Alert>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Tasks Preview */}
-      {automatedTasks.length > 0 && (
+    <div className={`space-y-6 ${className}`}>
+      {/* Event Information */}
+      {selectedEvent && (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Clock className="h-5 w-5" />
-              <span>Tareas Automáticas Activas</span>
+            <CardTitle className="flex items-center gap-2">
+              <Calendar className="h-5 w-5" />
+              {selectedEvent.title}
             </CardTitle>
+            <CardDescription>Información del evento y generación automática de tareas</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {automatedTasks.slice(0, 5).map((task) => (
-                <div key={task.id} className="flex items-center justify-between p-3 border rounded-lg">
-                  <div className="flex items-center space-x-3">
-                    {task.status === "completed" ? (
-                      <CheckCircle className="h-4 w-4 text-green-600" />
-                    ) : task.status === "in-progress" ? (
-                      <Clock className="h-4 w-4 text-blue-600" />
-                    ) : (
-                      <AlertTriangle className="h-4 w-4 text-orange-600" />
-                    )}
-                    <div>
-                      <p className="font-medium text-sm">{task.title}</p>
-                      <p className="text-xs text-gray-500">
-                        Vence: {new Date(task.dueDate).toLocaleDateString("es-AR")} • {task.category}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Badge
-                      variant={
-                        task.priority === "high" ? "destructive" : task.priority === "medium" ? "default" : "secondary"
-                      }
-                      className="text-xs"
-                    >
-                      {task.priority === "high" ? "Alta" : task.priority === "medium" ? "Media" : "Baja"}
-                    </Badge>
-                    <Badge variant="outline" className="bg-purple-50 text-purple-700 text-xs">
-                      🤖
-                    </Badge>
-                  </div>
-                </div>
-              ))}
-
-              {automatedTasks.length > 5 && (
-                <div className="text-center pt-2">
-                  <Button variant="ghost" size="sm">
-                    Ver todas las tareas ({automatedTasks.length})
-                  </Button>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm">
+                  {daysUntilEvent > 0 ? `${daysUntilEvent} días restantes` : "Evento pasado"}
+                </span>
+              </div>
+              {selectedEvent.attendees && (
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm">{selectedEvent.attendees} asistentes</span>
                 </div>
               )}
+              {selectedEvent.venue && (
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm">{selectedEvent.venue}</span>
+                </div>
+              )}
+            </div>
+
+            {/* International Event Alert */}
+            {isInternational && (
+              <Alert>
+                <Globe className="h-4 w-4" />
+                <AlertDescription>
+                  Evento internacional detectado en {eventCountry}. Se generarán tareas adicionales para gestión de
+                  visas, documentación aduanera y coordinación internacional.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {/* Generate Tasks Button */}
+            <Button onClick={handleGenerateTasks} disabled={isGenerating || daysUntilEvent < 0} className="w-full">
+              <Bot className="h-4 w-4 mr-2" />
+              {isGenerating ? "Generando tareas..." : "Generar tareas automáticas"}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Statistics */}
+      {stats && stats.totalAutomatedTasks > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5" />
+              Estadísticas de Tareas Automáticas
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Progress Bar */}
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span>Progreso general</span>
+                <span>{Math.round((stats.completedAutomatedTasks / stats.totalAutomatedTasks) * 100)}%</span>
+              </div>
+              <Progress value={(stats.completedAutomatedTasks / stats.totalAutomatedTasks) * 100} className="h-2" />
+            </div>
+
+            {/* Stats Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="text-center">
+                <div className="text-2xl font-bold text-blue-600">{stats.totalAutomatedTasks}</div>
+                <div className="text-xs text-muted-foreground">Total</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-green-600">{stats.completedAutomatedTasks}</div>
+                <div className="text-xs text-muted-foreground">Completadas</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-yellow-600">{stats.pendingAutomatedTasks}</div>
+                <div className="text-xs text-muted-foreground">Pendientes</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-orange-600">{stats.upcomingEvents}</div>
+                <div className="text-xs text-muted-foreground">Eventos próximos</div>
+              </div>
             </div>
           </CardContent>
         </Card>
       )}
 
-      {/* Global Stats */}
-      {stats.total > 0 && (
+      {/* Recent Automated Tasks */}
+      {recentAutomatedTasks.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Estadísticas Globales</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Zap className="h-5 w-5" />
+              Tareas Generadas Recientemente
+            </CardTitle>
+            <CardDescription>Últimas tareas creadas automáticamente</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-              <div>
-                <div className="text-lg font-bold">{stats.total}</div>
-                <div className="text-xs text-gray-600">Total</div>
-              </div>
-              <div>
-                <div className="text-lg font-bold text-orange-600">{stats.pending}</div>
-                <div className="text-xs text-gray-600">Pendientes</div>
-              </div>
-              <div>
-                <div className="text-lg font-bold text-blue-600">{stats.inProgress}</div>
-                <div className="text-xs text-gray-600">En progreso</div>
-              </div>
-              <div>
-                <div className="text-lg font-bold text-green-600">{stats.completed}</div>
-                <div className="text-xs text-gray-600">Completadas</div>
-              </div>
+            <div className="space-y-3">
+              {recentAutomatedTasks.map((task) => (
+                <div key={task.id} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-sm font-medium">{task.title}</h4>
+                      <Badge
+                        variant={
+                          task.priority === "high"
+                            ? "destructive"
+                            : task.priority === "medium"
+                              ? "default"
+                              : "secondary"
+                        }
+                        className="text-xs"
+                      >
+                        {task.priority}
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">{task.category}</p>
+                    {task.assignee && <p className="text-xs text-muted-foreground">Asignado a: {task.assignee}</p>}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {task.status === "completed" && <CheckCircle className="h-4 w-4 text-green-600" />}
+                    {task.status === "pending" && task.dueDate && (
+                      <div className="text-xs text-muted-foreground">{new Date(task.dueDate).toLocaleDateString()}</div>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {/* Overdue Alert */}
+      {stats && stats.pendingAutomatedTasks > 0 && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            Tienes {stats.pendingAutomatedTasks} tarea{stats.pendingAutomatedTasks > 1 ? "s" : ""} pendiente
+            {stats.pendingAutomatedTasks > 1 ? "s" : ""}. Revisa la lista de tareas para actualizar su estado.
+          </AlertDescription>
+        </Alert>
       )}
     </div>
   )
