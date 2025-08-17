@@ -6,14 +6,12 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useUnifiedEventStore } from "@/store/unified-event-store"
-import { Calendar, MapPin, Clock, Users, Search, Filter, Plus } from "lucide-react"
+import { useUnifiedEventStore, getArgentinaTime } from "@/store/unified-event-store"
+import { CountdownDisplay } from "@/components/countdown-display"
+import { Calendar, MapPin, Clock, Search, Filter, Plus, Eye, CheckSquare, UserCheck } from "lucide-react"
 import { format, parseISO } from "date-fns"
 import { es } from "date-fns/locale"
 import Link from "next/link"
-
-// Fecha de corte para mostrar eventos - 15 de agosto 2025 en adelante
-const FECHA_MOSTRAR_DESDE = "2025-08-15"
 
 export default function EventsPage() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -21,19 +19,31 @@ export default function EventsPage() {
   const [typeFilter, setTypeFilter] = useState("all")
   const [sortBy, setSortBy] = useState("date")
 
-  const { events } = useUnifiedEventStore()
+  const { events, getUpcoming30DaysEvents } = useUnifiedEventStore()
 
-  // Filtrar eventos desde el 15 de agosto 2025 en adelante (excluyendo feriados)
-  const eventsToShow = events.filter((event) => {
-    return event.date >= FECHA_MOSTRAR_DESDE && event.type !== "feriado"
-  })
+  const upcomingEvents = getUpcoming30DaysEvents()
+  const allRelevantEvents = events.filter((event) => event.type !== "feriado")
 
   const filteredAndSortedEvents = useMemo(() => {
-    const filtered = eventsToShow.filter((event) => {
+    const eventsToFilter = statusFilter === "upcoming" ? upcomingEvents : allRelevantEvents
+
+    const filtered = eventsToFilter.filter((event) => {
       const matchesSearch =
         event.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        event.venue.toLowerCase().includes(searchTerm.toLowerCase())
-      const matchesStatus = statusFilter === "all" || event.status === statusFilter
+        event.venue.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (event.address && event.address.toLowerCase().includes(searchTerm.toLowerCase()))
+
+      let matchesStatus = true
+      if (statusFilter === "confirmed") matchesStatus = event.status === "confirmed"
+      else if (statusFilter === "pending") matchesStatus = event.status === "pending"
+      else if (statusFilter === "cancelled") matchesStatus = event.status === "cancelled"
+      else if (statusFilter === "in-progress") {
+        const nowAR = getArgentinaTime()
+        const eventDate = nowAR.fromISO(event.date)
+        const isToday = eventDate.hasSame(nowAR, "day")
+        matchesStatus = isToday && event.status === "confirmed"
+      }
+
       const matchesType = typeFilter === "all" || event.type === typeFilter
 
       return matchesSearch && matchesStatus && matchesType
@@ -56,31 +66,29 @@ export default function EventsPage() {
     })
 
     return filtered
-  }, [eventsToShow, searchTerm, statusFilter, typeFilter, sortBy])
+  }, [allRelevantEvents, upcomingEvents, searchTerm, statusFilter, typeFilter, sortBy])
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case "confirmed":
-        return "bg-green-500"
+        return "bg-green-100 text-green-800"
       case "pending":
-        return "bg-yellow-500"
+        return "bg-yellow-100 text-yellow-800"
       case "cancelled":
-        return "bg-red-500"
+        return "bg-red-100 text-red-800"
       default:
-        return "bg-gray-500"
+        return "bg-gray-100 text-gray-800"
     }
   }
 
   const getTypeColor = (type: string) => {
     switch (type) {
       case "propio":
-        return "bg-blue-500"
+        return "bg-blue-100 text-blue-800"
       case "privado":
-        return "bg-purple-500"
-      case "feriado":
-        return "bg-orange-500"
+        return "bg-purple-100 text-purple-800"
       default:
-        return "bg-gray-500"
+        return "bg-gray-100 text-gray-800"
     }
   }
 
@@ -103,28 +111,32 @@ export default function EventsPage() {
         return "Propio"
       case "privado":
         return "Privado"
-      case "feriado":
-        return "Feriado"
       default:
         return type
     }
   }
 
-  // Estadísticas
-  const totalEvents = eventsToShow.length
-  const confirmedEvents = eventsToShow.filter((e) => e.status === "confirmed").length
-  const pendingEvents = eventsToShow.filter((e) => e.status === "pending").length
-  const ownEvents = eventsToShow.filter((e) => e.type === "propio").length
-  const privateEvents = eventsToShow.filter((e) => e.type === "privado").length
+  const totalEvents = allRelevantEvents.length
+  const upcomingCount = upcomingEvents.length
+  const confirmedEvents = allRelevantEvents.filter((e) => e.status === "confirmed").length
+  const pendingEvents = allRelevantEvents.filter((e) => e.status === "pending").length
+  const ownEvents = allRelevantEvents.filter((e) => e.type === "propio").length
+  const privateEvents = allRelevantEvents.filter((e) => e.type === "privado").length
+
+  const nowAR = getArgentinaTime()
+  const inProgressEvents = allRelevantEvents.filter((event) => {
+    const eventDate = nowAR.fromISO(event.date)
+    return eventDate.hasSame(nowAR, "day") && event.status === "confirmed"
+  }).length
 
   return (
     <div className="container mx-auto p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Eventos DER 2025</h1>
+          <h1 className="text-3xl font-bold">Gestión de Eventos</h1>
           <p className="text-muted-foreground">
-            Eventos desde 15 Agosto 2025 • {totalEvents} eventos • {confirmedEvents} confirmados • {pendingEvents}{" "}
+            {upcomingCount} próximos (30 días) • {totalEvents} total • {confirmedEvents} confirmados • {pendingEvents}{" "}
             pendientes
           </p>
         </div>
@@ -138,16 +150,26 @@ export default function EventsPage() {
         </div>
       </div>
 
-      {/* Estadísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Eventos</CardTitle>
+            <CardTitle className="text-sm font-medium">Próximos 30d</CardTitle>
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalEvents}</div>
-            <p className="text-xs text-muted-foreground">Desde 15 agosto</p>
+            <div className="text-2xl font-bold text-blue-600">{upcomingCount}</div>
+            <p className="text-xs text-muted-foreground">Ventana operativa</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">En Curso</CardTitle>
+            <Badge className="bg-orange-500">{inProgressEvents}</Badge>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-orange-600">{inProgressEvents}</div>
+            <p className="text-xs text-muted-foreground">Hoy</p>
           </CardContent>
         </Card>
 
@@ -200,7 +222,6 @@ export default function EventsPage() {
         </Card>
       </div>
 
-      {/* Filtros y Búsqueda */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -213,7 +234,7 @@ export default function EventsPage() {
             <div className="relative">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar eventos..."
+                placeholder="Buscar por nombre, venue, ciudad..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
@@ -225,9 +246,11 @@ export default function EventsPage() {
                 <SelectValue placeholder="Estado" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todos los estados</SelectItem>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="upcoming">Próximos 30d</SelectItem>
                 <SelectItem value="confirmed">Confirmados</SelectItem>
                 <SelectItem value="pending">Pendientes</SelectItem>
+                <SelectItem value="in-progress">En Curso</SelectItem>
                 <SelectItem value="cancelled">Cancelados</SelectItem>
               </SelectContent>
             </Select>
@@ -237,7 +260,7 @@ export default function EventsPage() {
                 <SelectValue placeholder="Tipo" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todos los tipos</SelectItem>
+                <SelectItem value="all">Todos</SelectItem>
                 <SelectItem value="propio">Propios</SelectItem>
                 <SelectItem value="privado">Privados</SelectItem>
               </SelectContent>
@@ -270,7 +293,6 @@ export default function EventsPage() {
         </CardContent>
       </Card>
 
-      {/* Lista de Eventos */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredAndSortedEvents.length > 0 ? (
           filteredAndSortedEvents.map((event) => (
@@ -278,7 +300,7 @@ export default function EventsPage() {
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-2">
-                    <span className="text-2xl">{event.emoji}</span>
+                    <span className="text-2xl">{event.emoji || "🎵"}</span>
                     <div>
                       <CardTitle className="text-lg">{event.title}</CardTitle>
                       <CardDescription>
@@ -286,7 +308,8 @@ export default function EventsPage() {
                       </CardDescription>
                     </div>
                   </div>
-                  <div className="flex flex-col gap-1">
+                  <div className="flex flex-col gap-1 items-end">
+                    <CountdownDisplay eventDate={event.date} variant="compact" />
                     <Badge className={getStatusColor(event.status)}>{getStatusText(event.status)}</Badge>
                     <Badge className={getTypeColor(event.type)} variant="outline">
                       {getTypeText(event.type)}
@@ -302,6 +325,13 @@ export default function EventsPage() {
                   </div>
                 )}
 
+                {event.address && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <MapPin className="h-4 w-4" />
+                    <span className="truncate">{event.address}</span>
+                  </div>
+                )}
+
                 {event.openingTime && event.closingTime && (
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <Clock className="h-4 w-4" />
@@ -311,10 +341,11 @@ export default function EventsPage() {
                   </div>
                 )}
 
-                {event.attendees && (
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Users className="h-4 w-4" />
-                    <span>{event.attendees} asistentes</span>
+                {event.theme && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Badge variant="secondary" className="text-xs">
+                      {event.theme}
+                    </Badge>
                   </div>
                 )}
 
@@ -322,13 +353,19 @@ export default function EventsPage() {
 
                 <div className="flex gap-2 pt-2">
                   <Link href={`/events/${event.id}`} className="flex-1">
-                    <Button variant="outline" className="w-full bg-transparent">
-                      Ver Detalles
+                    <Button variant="outline" className="w-full bg-transparent" size="sm">
+                      <Eye className="w-4 h-4 mr-1" />
+                      Ver Detalle
                     </Button>
                   </Link>
-                  <Link href={`/events/${event.id}/edit`}>
-                    <Button variant="ghost" size="sm">
-                      Editar
+                  <Link href={`/events/${event.id}?tab=tasks`}>
+                    <Button variant="ghost" size="sm" title="Abrir Tareas">
+                      <CheckSquare className="w-4 h-4" />
+                    </Button>
+                  </Link>
+                  <Link href={`/events/${event.id}?tab=providers`}>
+                    <Button variant="ghost" size="sm" title="Abrir Proveedores">
+                      <UserCheck className="w-4 h-4" />
                     </Button>
                   </Link>
                 </div>
@@ -344,12 +381,12 @@ export default function EventsPage() {
                 <p className="text-muted-foreground text-center mb-4">
                   {searchTerm || statusFilter !== "all" || typeFilter !== "all"
                     ? "Intenta ajustar los filtros de búsqueda"
-                    : "No hay eventos programados desde el 15 de agosto 2025"}
+                    : "No hay eventos que coincidan con los criterios seleccionados"}
                 </p>
                 <Link href="/events/new">
                   <Button>
                     <Plus className="w-4 h-4 mr-2" />
-                    Crear Primer Evento
+                    Crear Nuevo Evento
                   </Button>
                 </Link>
               </CardContent>
@@ -363,9 +400,10 @@ export default function EventsPage() {
         <Card>
           <CardContent className="pt-6">
             <div className="text-center text-sm text-muted-foreground">
-              Mostrando {filteredAndSortedEvents.length} de {totalEvents} eventos desde el 15 de agosto 2025
+              Mostrando {filteredAndSortedEvents.length} eventos
+              {statusFilter === "upcoming" && " de los próximos 30 días"}
               <br />
-              Los eventos anteriores al 15 de agosto están archivados y no se muestran
+              Hora Argentina: {getArgentinaTime().toFormat("dd/MM/yyyy HH:mm")} (GMT-3)
             </div>
           </CardContent>
         </Card>

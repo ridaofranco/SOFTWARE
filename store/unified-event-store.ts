@@ -1,5 +1,6 @@
 import { create } from "zustand"
 import { persist } from "zustand/middleware"
+import { DateTime } from "luxon"
 
 // Types
 export interface Event {
@@ -135,6 +136,43 @@ export interface Chat {
   eventId?: string
 }
 
+export const getArgentinaTime = () => {
+  return DateTime.now().setZone("America/Argentina/Buenos_Aires")
+}
+
+export const getUpcoming30DaysEvents = (events: Event[]) => {
+  const nowAR = getArgentinaTime()
+  const thirtyDaysFromNow = nowAR.plus({ days: 30 })
+
+  return events
+    .filter((event) => {
+      const eventDate = DateTime.fromISO(event.date).setZone("America/Argentina/Buenos_Aires")
+      return eventDate >= nowAR && eventDate <= thirtyDaysFromNow
+    })
+    .sort((a, b) => {
+      const dateA = DateTime.fromISO(a.date)
+      const dateB = DateTime.fromISO(b.date)
+      return dateA.toMillis() - dateB.toMillis()
+    })
+}
+
+export const getEventCountdown = (eventDate: string) => {
+  const nowAR = getArgentinaTime()
+  const eventDateTime = DateTime.fromISO(eventDate).setZone("America/Argentina/Buenos_Aires")
+
+  if (eventDateTime <= nowAR) {
+    return { days: 0, hours: 0, minutes: 0, isExpired: true }
+  }
+
+  const diff = eventDateTime.diff(nowAR, ["days", "hours", "minutes"])
+  return {
+    days: Math.floor(diff.days),
+    hours: Math.floor(diff.hours),
+    minutes: Math.floor(diff.minutes),
+    isExpired: false,
+  }
+}
+
 interface UnifiedEventStore {
   // State
   events: Event[]
@@ -190,6 +228,9 @@ interface UnifiedEventStore {
   deleteChat: (id: string) => void
   getChat: (id: string) => Chat | undefined
   addMessage: (chatId: string, message: ChatMessage) => void
+
+  getUpcoming30DaysEvents: () => Event[]
+  getArgentinaTime: () => DateTime
 }
 
 // EVENTOS CORREGIDOS 2025 - FECHAS REALES CONFIRMADAS (SIN ELECCIONES)
@@ -3764,13 +3805,22 @@ export const useUnifiedEventStore = create<UnifiedEventStore>()(
           ),
           chatMessages: [...state.chatMessages, message],
         })),
+
+      getUpcoming30DaysEvents: () => {
+        const events = get().events
+        return getUpcoming30DaysEvents(events)
+      },
+
+      getArgentinaTime: () => {
+        return getArgentinaTime()
+      },
     }),
     {
       name: "unified-event-storage",
-      version: 9,
+      version: 10, // Incremented version for new features
       migrate: (persistedState: any, version: number) => {
         // Handle migration from previous versions
-        if (version < 9) {
+        if (version < 10) {
           return {
             ...persistedState,
             events: eventosCompletos2025,
@@ -3783,7 +3833,6 @@ export const useUnifiedEventStore = create<UnifiedEventStore>()(
             chatMessages: initialChatMessages,
           }
         }
-
         return persistedState
       },
     },

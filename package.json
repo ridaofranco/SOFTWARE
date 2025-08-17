@@ -24,6 +24,7 @@
     "immer": "latest",
     "jspdf": "latest",
     "lucide-react": "^0.454.0",
+    "luxon": "latest",
     "next": "14.2.16",
     "next-themes": "latest",
     "react": "^18",

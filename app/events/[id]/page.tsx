@@ -1,27 +1,20 @@
 "use client"
 
 import { useUnifiedEventStore } from "@/store/unified-event-store"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
-  ArrowLeft,
-  Calendar,
-  MapPin,
-  Clock,
-  User,
-  Phone,
-  Mail,
-  Edit,
-  Download,
-  MessageSquare,
-  Calculator,
-} from "lucide-react"
+import { CountdownDisplay } from "@/components/countdown-display"
+import { EventGeneralTab } from "@/components/events/event-general-tab"
+import { EventProvidersTab } from "@/components/events/event-providers-tab"
+import { EventTasksTab } from "@/components/events/event-tasks-tab"
+import { EventManualsTab } from "@/components/events/event-manuals-tab"
+import { EventInsuranceTab } from "@/components/events/event-insurance-tab"
+import { EventContractsTab } from "@/components/events/event-contracts-tab"
+import { ArrowLeft, Calendar, MapPin, Clock, Edit, Download } from "lucide-react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useEffect, useState } from "react"
-import TasksList from "@/components/tasks-list"
 
 interface EventDetailPageProps {
   params: { id: string }
@@ -29,6 +22,9 @@ interface EventDetailPageProps {
 
 export default function EventDetailPage({ params }: EventDetailPageProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const defaultTab = searchParams.get("tab") || "general"
+
   const { events, venues, tasks, budgetItems, chatMessages } = useUnifiedEventStore()
   const [event, setEvent] = useState<any>(null)
 
@@ -44,7 +40,9 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
   if (!event) {
     return (
       <div className="container mx-auto p-6 text-center">
-        <p>Cargando evento...</p>
+        <div className="flex items-center justify-center py-12">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
+        </div>
       </div>
     )
   }
@@ -56,12 +54,12 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "completed":
-        return "bg-green-100 text-green-800"
-      case "in-progress":
-        return "bg-blue-100 text-blue-800"
       case "confirmed":
-        return "bg-orange-100 text-orange-800"
+        return "bg-green-100 text-green-800"
+      case "pending":
+        return "bg-yellow-100 text-yellow-800"
+      case "cancelled":
+        return "bg-red-100 text-red-800"
       default:
         return "bg-gray-100 text-gray-800"
     }
@@ -69,20 +67,41 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case "completed":
-        return "Completado"
-      case "in-progress":
-        return "En Progreso"
       case "confirmed":
         return "Confirmado"
+      case "pending":
+        return "Pendiente"
+      case "cancelled":
+        return "Cancelado"
       default:
-        return "Planificación"
+        return status
+    }
+  }
+
+  const getTypeColor = (type: string) => {
+    switch (type) {
+      case "propio":
+        return "bg-blue-100 text-blue-800"
+      case "privado":
+        return "bg-purple-100 text-purple-800"
+      default:
+        return "bg-gray-100 text-gray-800"
+    }
+  }
+
+  const getTypeText = (type: string) => {
+    switch (type) {
+      case "propio":
+        return "Propio"
+      case "privado":
+        return "Privado"
+      default:
+        return type
     }
   }
 
   return (
     <div className="container mx-auto p-6 max-w-7xl">
-      {/* Header */}
       <div className="mb-6">
         <Link href="/events">
           <Button variant="ghost" size="sm" className="mb-4">
@@ -91,23 +110,47 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
           </Button>
         </Link>
 
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">{venueName}</h1>
-            <div className="flex items-center space-x-4">
+        <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+          <div className="flex-1">
+            <div className="flex items-center gap-3 mb-2">
+              <span className="text-3xl">{event.emoji || "🎵"}</span>
+              <h1 className="text-3xl font-bold text-gray-900">{event.title}</h1>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 mb-3">
               <Badge className={getStatusColor(event.status)}>{getStatusText(event.status)}</Badge>
-              <span className="text-gray-600">
+              <Badge className={getTypeColor(event.type)} variant="outline">
+                {getTypeText(event.type)}
+              </Badge>
+              <CountdownDisplay eventDate={event.date} />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+              <div className="flex items-center gap-1">
+                <Calendar className="w-4 h-4" />
                 {new Date(event.date).toLocaleDateString("es-AR", {
                   weekday: "long",
                   year: "numeric",
                   month: "long",
                   day: "numeric",
                 })}
-              </span>
+              </div>
+              {venueName && (
+                <div className="flex items-center gap-1">
+                  <MapPin className="w-4 h-4" />
+                  {venueName}
+                </div>
+              )}
+              {event.openingTime && (
+                <div className="flex items-center gap-1">
+                  <Clock className="w-4 h-4" />
+                  {event.openingTime} - {event.closingTime}
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="flex space-x-3 mt-4 md:mt-0">
+          <div className="flex gap-2">
             <Link href={`/events/${event.id}/edit`}>
               <Button variant="outline">
                 <Edit className="mr-2 h-4 w-4" />
@@ -122,274 +165,38 @@ export default function EventDetailPage({ params }: EventDetailPageProps) {
         </div>
       </div>
 
-      <Tabs defaultValue="general" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-5">
+      <Tabs defaultValue={defaultTab} className="space-y-6">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="general">General</TabsTrigger>
-          <TabsTrigger value="proveedores">Proveedores</TabsTrigger>
-          <TabsTrigger value="presupuesto">Presupuesto</TabsTrigger>
-          <TabsTrigger value="tareas">Tareas</TabsTrigger>
-          <TabsTrigger value="comunicacion">Comunicación</TabsTrigger>
+          <TabsTrigger value="providers">Proveedores</TabsTrigger>
+          <TabsTrigger value="tasks">Tareas</TabsTrigger>
+          <TabsTrigger value="manuals">Manuales</TabsTrigger>
+          <TabsTrigger value="insurance">Seguros</TabsTrigger>
+          <TabsTrigger value="contracts">Contratos</TabsTrigger>
         </TabsList>
 
         <TabsContent value="general">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Información General */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Información del Evento</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-start space-x-3">
-                  <Calendar className="h-5 w-5 text-gray-500 mt-0.5" />
-                  <div>
-                    <p className="font-medium">Fecha</p>
-                    <p className="text-gray-600">{new Date(event.date).toLocaleDateString("es-AR")}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-start space-x-3">
-                  <MapPin className="h-5 w-5 text-gray-500 mt-0.5" />
-                  <div>
-                    <p className="font-medium">Venue</p>
-                    <p className="text-gray-600">{venueName}</p>
-                    <p className="text-sm text-gray-500">{event.address}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-start space-x-3">
-                  <MapPin className="h-5 w-5 text-gray-500 mt-0.5" />
-                  <div>
-                    <p className="font-medium">Punto de carga/descarga</p>
-                    <p className="text-gray-600">{event.loadingPoint}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-start space-x-3">
-                  <Clock className="h-5 w-5 text-gray-500 mt-0.5" />
-                  <div>
-                    <p className="font-medium">Horarios</p>
-                    <div className="text-sm text-gray-600 space-y-1">
-                      <p>Apertura: {event.openingTime}</p>
-                      <p>Cierre: {event.closingTime}</p>
-                      <p>Montaje: {event.setupStartTime}</p>
-                      <p>Desarme: {event.teardownTime}</p>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Contacto del Productor */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Contacto del Productor</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center space-x-3">
-                  <User className="h-5 w-5 text-gray-500" />
-                  <div>
-                    <p className="font-medium">{event.producerContact.name}</p>
-                    <p className="text-sm text-gray-500">Productor responsable</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center space-x-3">
-                  <Phone className="h-5 w-5 text-gray-500" />
-                  <div>
-                    <p className="text-gray-600">{event.producerContact.phone}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-center space-x-3">
-                  <Mail className="h-5 w-5 text-gray-500" />
-                  <div>
-                    <p className="text-gray-600">{event.producerContact.email}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Permisos */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Permisos y Documentación</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span>Permiso Local</span>
-                  <Badge variant={event.hasLocalPermit ? "default" : "secondary"}>
-                    {event.hasLocalPermit ? "Obtenido" : "Pendiente"}
-                  </Badge>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <span>Permiso de Alcohol</span>
-                  <Badge variant={event.hasAlcoholPermit ? "default" : "secondary"}>
-                    {event.hasAlcoholPermit ? "Obtenido" : "Pendiente"}
-                  </Badge>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Notas */}
-            {event.notes && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Notas del Evento</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-gray-600">{event.notes}</p>
-                </CardContent>
-              </Card>
-            )}
-          </div>
+          <EventGeneralTab event={event} />
         </TabsContent>
 
-        <TabsContent value="proveedores">
-          <Card>
-            <CardHeader>
-              <CardTitle>Proveedores Asignados</CardTitle>
-              <CardDescription>{event.providers.length} proveedores para este evento</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {event.providers.length === 0 ? (
-                <div className="text-center py-8">
-                  <p className="text-gray-500 mb-4">No hay proveedores asignados</p>
-                  <Link href={`/events/${event.id}/edit`}>
-                    <Button>Agregar Proveedores</Button>
-                  </Link>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {event.providers.map((provider: any) => (
-                    <div key={provider.id} className="flex items-center justify-between p-4 border rounded-lg">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-3">
-                          <div>
-                            <p className="font-medium">{provider.name}</p>
-                            <p className="text-sm text-gray-500">{provider.item}</p>
-                            <p className="text-sm text-gray-500">{provider.contact}</p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="text-right">
-                        {provider.price && <p className="font-medium">${provider.price}</p>}
-                        <Badge variant="outline" className="mt-1">
-                          {provider.status}
-                        </Badge>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+        <TabsContent value="providers">
+          <EventProvidersTab eventId={event.id} />
         </TabsContent>
 
-        <TabsContent value="presupuesto">
-          <div className="space-y-4">
-            <div className="flex justify-between items-center">
-              <h3 className="text-lg font-medium">Gestión Presupuestaria</h3>
-              <Link href={`/events/${event.id}/presupuesto`}>
-                <Button>
-                  <Calculator className="mr-2 h-4 w-4" />
-                  Abrir Presupuesto Completo
-                </Button>
-              </Link>
-            </div>
-            <p className="text-gray-600">
-              Administra todos los aspectos financieros de este evento con el sistema completo de presupuestos.
-            </p>
-
-            {/* Resumen rápido si hay items */}
-            {eventBudget.length > 0 && (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
-                <div className="text-center p-3 bg-purple-50 rounded-lg">
-                  <div className="text-lg font-bold text-purple-600">
-                    $
-                    {eventBudget
-                      .filter((i) => i.area === "ARTE")
-                      .reduce((sum, i) => sum + i.resultadoNegociacion, 0)
-                      .toLocaleString("es-AR")}
-                  </div>
-                  <div className="text-xs text-gray-600">ARTE</div>
-                </div>
-                <div className="text-center p-3 bg-blue-50 rounded-lg">
-                  <div className="text-lg font-bold text-blue-600">
-                    $
-                    {eventBudget
-                      .filter((i) => i.area === "BOOKING")
-                      .reduce((sum, i) => sum + i.resultadoNegociacion, 0)
-                      .toLocaleString("es-AR")}
-                  </div>
-                  <div className="text-xs text-gray-600">BOOKING</div>
-                </div>
-                <div className="text-center p-3 bg-green-50 rounded-lg">
-                  <div className="text-lg font-bold text-green-600">
-                    $
-                    {eventBudget
-                      .filter((i) => i.area === "MARKETING")
-                      .reduce((sum, i) => sum + i.resultadoNegociacion, 0)
-                      .toLocaleString("es-AR")}
-                  </div>
-                  <div className="text-xs text-gray-600">MARKETING</div>
-                </div>
-                <div className="text-center p-3 bg-gray-50 rounded-lg">
-                  <div className="text-lg font-bold">
-                    ${eventBudget.reduce((sum, i) => sum + i.resultadoNegociacion, 0).toLocaleString("es-AR")}
-                  </div>
-                  <div className="text-xs text-gray-600">TOTAL</div>
-                </div>
-              </div>
-            )}
-          </div>
+        <TabsContent value="tasks">
+          <EventTasksTab eventId={event.id} />
         </TabsContent>
 
-        <TabsContent value="tareas">
-          <Card>
-            <CardHeader>
-              <CardTitle>Tareas del Evento</CardTitle>
-              <CardDescription>
-                {eventTasks.filter((t) => t.status !== "completed").length} tareas pendientes
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <TasksList eventId={event.id} />
-            </CardContent>
-          </Card>
+        <TabsContent value="manuals">
+          <EventManualsTab eventId={event.id} />
         </TabsContent>
 
-        <TabsContent value="comunicacion">
-          <Card>
-            <CardHeader>
-              <CardTitle>Comunicaciones</CardTitle>
-              <CardDescription>Historial de mensajes y comunicaciones del evento</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {eventMessages.length === 0 ? (
-                <div className="text-center py-8">
-                  <MessageSquare className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                  <p className="text-gray-500 mb-4">No hay mensajes registrados</p>
-                  <Button>Enviar Primer Mensaje</Button>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {eventMessages.map((message) => (
-                    <div key={message.id} className="p-4 border rounded-lg">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-medium">{message.sender}</span>
-                        <span className="text-sm text-gray-500">
-                          {new Date(message.timestamp).toLocaleString("es-AR")}
-                        </span>
-                      </div>
-                      <p className="text-gray-700">{message.message}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+        <TabsContent value="insurance">
+          <EventInsuranceTab eventId={event.id} />
+        </TabsContent>
+
+        <TabsContent value="contracts">
+          <EventContractsTab eventId={event.id} />
         </TabsContent>
       </Tabs>
     </div>
