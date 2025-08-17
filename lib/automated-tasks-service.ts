@@ -595,5 +595,49 @@ export function getAutomatedTasksStats() {
       automatedTasks.length > 0
         ? Math.round(((automatedTasks.length - overdueTasks.length) / automatedTasks.length) * 100)
         : 100,
+    pendingAutomatedTasks: automatedTasks.filter((task) => task.status === "pending").length,
+    completedAutomatedTasks: automatedTasks.filter((task) => task.status === "completed").length,
+    eventsWithAutomation: [...new Set(automatedTasks.map((task) => task.eventId))].length,
+    upcomingEvents: events.filter((event) => {
+      const eventDate = DateTime.fromISO(event.date)
+      return eventDate > now && eventDate <= now.plus({ days: 30 })
+    }).length,
   }
+}
+
+export function getUrgentAutomatedEvents() {
+  const { events, tasks } = useUnifiedEventStore.getState()
+  const now = DateTime.now().setZone("America/Argentina/Buenos_Aires")
+
+  // Get events in the next 30 days that have automated tasks
+  const upcomingEvents = events.filter((event) => {
+    const eventDate = DateTime.fromISO(event.date)
+    const daysUntilEvent = eventDate.diff(now, "days").days
+    return daysUntilEvent > 0 && daysUntilEvent <= 30
+  })
+
+  // Filter events that have pending automated tasks
+  const urgentEvents = upcomingEvents
+    .map((event) => {
+      const eventTasks = tasks.filter((task) => task.eventId === event.id && task.isAutomated)
+      const pendingTasks = eventTasks.filter((task) => task.status === "pending")
+
+      if (pendingTasks.length === 0) return null
+
+      const eventDate = DateTime.fromISO(event.date)
+      const daysUntilEvent = Math.ceil(eventDate.diff(now, "days").days)
+      const country = getCountryFromVenue(event.venue)
+
+      return {
+        ...event,
+        automatedTasks: eventTasks.length,
+        pendingTasks: pendingTasks.length,
+        daysUntilEvent,
+        country,
+      }
+    })
+    .filter(Boolean)
+    .sort((a, b) => a!.daysUntilEvent - b!.daysUntilEvent)
+
+  return urgentEvents
 }
