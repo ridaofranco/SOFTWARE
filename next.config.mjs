@@ -7,9 +7,9 @@ const nextConfig = {
   webpack: (config) => {
     config.resolve.alias = {
       ...config.resolve.alias,
-      '@': new URL('./', import.meta.url).pathname
-    }
-    return config
+      '@': '.'
+    };
+    return config;
   },
   eslint: {
     ignoreDuringBuilds: true,
@@ -20,6 +20,6 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
-}
+};
 
-export default nextConfig
+export default nextConfig;
