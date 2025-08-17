@@ -6,12 +6,28 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
-import { MapPin, Plus, Search, Calendar, Users, Edit, Trash2, Building } from "lucide-react"
+import {
+  MapPin,
+  Plus,
+  Search,
+  Calendar,
+  Users,
+  Edit,
+  Trash2,
+  Building,
+  AlertTriangle,
+  CheckCircle,
+  XCircle,
+  Clock,
+} from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Badge } from "@/components/ui/badge"
 
 export default function VenuesPage() {
-  const { venues, events, addVenue, updateVenue, deleteVenue } = useUnifiedEventStore()
+  const { venues, events, addVenue, updateVenue, deleteVenue, getVenuesWithExpiringPermits, getVenuePermitStatus } =
+    useUnifiedEventStore()
+
   const { toast } = useToast()
 
   const [searchTerm, setSearchTerm] = useState("")
@@ -23,14 +39,21 @@ export default function VenuesPage() {
     capacity: "",
     type: "",
     notes: "",
+    permits: {
+      localPermit: { hasPermit: false, expiryDate: "", notes: "" },
+      alcoholPermit: { hasPermit: false, expiryDate: "", notes: "" },
+      firePermit: { hasPermit: false, expiryDate: "", notes: "" },
+      capacityPermit: { hasPermit: false, expiryDate: "", maxCapacity: "", notes: "" },
+    },
   })
 
-  // Filtrar venues
   const filteredVenues = venues.filter(
     (venue) =>
       venue.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
       venue.direccion.toLowerCase().includes(searchTerm.toLowerCase()),
   )
+
+  const venuesWithExpiringPermits = getVenuesWithExpiringPermits()
 
   const handleAddVenue = () => {
     if (!newVenue.nombre || !newVenue.direccion) {
@@ -46,7 +69,30 @@ export default function VenuesPage() {
       nombre: newVenue.nombre,
       direccion: newVenue.direccion,
       capacity: Number.parseInt(newVenue.capacity) || undefined,
-      type: newVenue.type || undefined,
+      type: (newVenue.type as any) || undefined,
+      permits: {
+        localPermit: {
+          hasPermit: newVenue.permits.localPermit.hasPermit,
+          expiryDate: newVenue.permits.localPermit.expiryDate || undefined,
+          notes: newVenue.permits.localPermit.notes || undefined,
+        },
+        alcoholPermit: {
+          hasPermit: newVenue.permits.alcoholPermit.hasPermit,
+          expiryDate: newVenue.permits.alcoholPermit.expiryDate || undefined,
+          notes: newVenue.permits.alcoholPermit.notes || undefined,
+        },
+        firePermit: {
+          hasPermit: newVenue.permits.firePermit.hasPermit,
+          expiryDate: newVenue.permits.firePermit.expiryDate || undefined,
+          notes: newVenue.permits.firePermit.notes || undefined,
+        },
+        capacityPermit: {
+          hasPermit: newVenue.permits.capacityPermit.hasPermit,
+          expiryDate: newVenue.permits.capacityPermit.expiryDate || undefined,
+          maxCapacity: Number.parseInt(newVenue.permits.capacityPermit.maxCapacity) || undefined,
+          notes: newVenue.permits.capacityPermit.notes || undefined,
+        },
+      },
     })
 
     toast({
@@ -54,13 +100,18 @@ export default function VenuesPage() {
       description: `${newVenue.nombre} ha sido agregado exitosamente`,
     })
 
-    // Reset form
     setNewVenue({
       nombre: "",
       direccion: "",
       capacity: "",
       type: "",
       notes: "",
+      permits: {
+        localPermit: { hasPermit: false, expiryDate: "", notes: "" },
+        alcoholPermit: { hasPermit: false, expiryDate: "", notes: "" },
+        firePermit: { hasPermit: false, expiryDate: "", notes: "" },
+        capacityPermit: { hasPermit: false, expiryDate: "", maxCapacity: "", notes: "" },
+      },
     })
     setShowAddForm(false)
   }
@@ -77,13 +128,50 @@ export default function VenuesPage() {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Gestión de Venues</h1>
-          <p className="text-gray-600">Administra y selecciona venues para tus eventos</p>
+          <p className="text-gray-600">Administra venues y tracking de habilitaciones</p>
         </div>
         <Button onClick={() => setShowAddForm(true)}>
           <Plus className="mr-2 h-4 w-4" />
           Nuevo Venue
         </Button>
       </div>
+
+      {venuesWithExpiringPermits.length > 0 && (
+        <Card className="mb-6 border-orange-200 bg-orange-50">
+          <CardHeader>
+            <CardTitle className="flex items-center text-orange-800">
+              <AlertTriangle className="mr-2 h-5 w-5" />
+              Alertas de Habilitaciones
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-orange-700 mb-3">
+              {venuesWithExpiringPermits.length} venue(s) tienen permisos que vencen en los próximos 30 días:
+            </p>
+            <div className="space-y-2">
+              {venuesWithExpiringPermits.map((venue) => {
+                const permitStatus = getVenuePermitStatus(venue.id)
+                return (
+                  <div key={venue.id} className="flex items-center justify-between p-3 bg-white rounded border">
+                    <div>
+                      <span className="font-medium">{venue.nombre}</span>
+                      <div className="text-sm text-gray-600">
+                        Permisos por vencer: {permitStatus.expiringPermits.join(", ")}
+                        {permitStatus.expiredPermits.length > 0 && (
+                          <span className="text-red-600 ml-2">Vencidos: {permitStatus.expiredPermits.join(", ")}</span>
+                        )}
+                      </div>
+                    </div>
+                    <Button size="sm" variant="outline">
+                      Revisar
+                    </Button>
+                  </div>
+                )
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Buscador */}
       <div className="mb-6">
@@ -145,14 +233,115 @@ export default function VenuesPage() {
               </div>
             </div>
 
-            <div className="mt-4">
-              <Label htmlFor="notes">Notas</Label>
-              <Textarea
-                id="notes"
-                value={newVenue.notes}
-                onChange={(e) => setNewVenue((prev) => ({ ...prev, notes: e.target.value }))}
-                placeholder="Información adicional sobre el venue"
-              />
+            <div className="mt-6">
+              <h3 className="text-lg font-medium mb-4">Permisos y Habilitaciones</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Local Permit */}
+                <div className="space-y-3">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="localPermit"
+                      checked={newVenue.permits.localPermit.hasPermit}
+                      onCheckedChange={(checked) =>
+                        setNewVenue((prev) => ({
+                          ...prev,
+                          permits: {
+                            ...prev.permits,
+                            localPermit: { ...prev.permits.localPermit, hasPermit: checked as boolean },
+                          },
+                        }))
+                      }
+                    />
+                    <Label htmlFor="localPermit" className="font-medium">
+                      Permiso Local
+                    </Label>
+                  </div>
+                  {newVenue.permits.localPermit.hasPermit && (
+                    <>
+                      <Input
+                        type="date"
+                        placeholder="Fecha de vencimiento"
+                        value={newVenue.permits.localPermit.expiryDate}
+                        onChange={(e) =>
+                          setNewVenue((prev) => ({
+                            ...prev,
+                            permits: {
+                              ...prev.permits,
+                              localPermit: { ...prev.permits.localPermit, expiryDate: e.target.value },
+                            },
+                          }))
+                        }
+                      />
+                      <Input
+                        placeholder="Notas del permiso"
+                        value={newVenue.permits.localPermit.notes}
+                        onChange={(e) =>
+                          setNewVenue((prev) => ({
+                            ...prev,
+                            permits: {
+                              ...prev.permits,
+                              localPermit: { ...prev.permits.localPermit, notes: e.target.value },
+                            },
+                          }))
+                        }
+                      />
+                    </>
+                  )}
+                </div>
+
+                {/* Alcohol Permit */}
+                <div className="space-y-3">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="alcoholPermit"
+                      checked={newVenue.permits.alcoholPermit.hasPermit}
+                      onCheckedChange={(checked) =>
+                        setNewVenue((prev) => ({
+                          ...prev,
+                          permits: {
+                            ...prev.permits,
+                            alcoholPermit: { ...prev.permits.alcoholPermit, hasPermit: checked as boolean },
+                          },
+                        }))
+                      }
+                    />
+                    <Label htmlFor="alcoholPermit" className="font-medium">
+                      Permiso de Alcohol
+                    </Label>
+                  </div>
+                  {newVenue.permits.alcoholPermit.hasPermit && (
+                    <>
+                      <Input
+                        type="date"
+                        placeholder="Fecha de vencimiento"
+                        value={newVenue.permits.alcoholPermit.expiryDate}
+                        onChange={(e) =>
+                          setNewVenue((prev) => ({
+                            ...prev,
+                            permits: {
+                              ...prev.permits,
+                              alcoholPermit: { ...prev.permits.alcoholPermit, expiryDate: e.target.value },
+                            },
+                          }))
+                        }
+                      />
+                      <Input
+                        placeholder="Notas del permiso"
+                        value={newVenue.permits.alcoholPermit.notes}
+                        onChange={(e) =>
+                          setNewVenue((prev) => ({
+                            ...prev,
+                            permits: {
+                              ...prev.permits,
+                              alcoholPermit: { ...prev.permits.alcoholPermit, notes: e.target.value },
+                            },
+                          }))
+                        }
+                      />
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
 
             <div className="flex justify-end space-x-2 mt-6">
@@ -192,6 +381,8 @@ export default function VenuesPage() {
               .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
               .slice(0, 3)
 
+            const permitStatus = getVenuePermitStatus(venue.id)
+
             return (
               <Card key={venue.id} className="hover:shadow-lg transition-shadow">
                 <CardHeader className="pb-2">
@@ -216,6 +407,40 @@ export default function VenuesPage() {
                       </div>
                     )}
                     {venue.type && <span className="bg-gray-100 px-2 py-1 rounded text-xs">{venue.type}</span>}
+                  </div>
+
+                  <div className="pt-2 border-t">
+                    <h4 className="text-sm font-medium mb-2 flex items-center">
+                      <CheckCircle className="h-3 w-3 mr-1" />
+                      Estado de Permisos
+                    </h4>
+                    <div className="flex flex-wrap gap-1">
+                      {permitStatus.hasValidPermits ? (
+                        <Badge variant="outline" className="text-green-600 border-green-200">
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          Válidos
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-red-600 border-red-200">
+                          <XCircle className="h-3 w-3 mr-1" />
+                          Problemas
+                        </Badge>
+                      )}
+
+                      {permitStatus.expiringPermits.length > 0 && (
+                        <Badge variant="outline" className="text-orange-600 border-orange-200">
+                          <Clock className="h-3 w-3 mr-1" />
+                          {permitStatus.expiringPermits.length} por vencer
+                        </Badge>
+                      )}
+
+                      {permitStatus.expiredPermits.length > 0 && (
+                        <Badge variant="outline" className="text-red-600 border-red-200">
+                          <XCircle className="h-3 w-3 mr-1" />
+                          {permitStatus.expiredPermits.length} vencidos
+                        </Badge>
+                      )}
+                    </div>
                   </div>
 
                   {/* Eventos recientes */}

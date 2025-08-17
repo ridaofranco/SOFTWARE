@@ -103,7 +103,7 @@ export function EventGeneralTab({ event }: EventGeneralTabProps) {
                   <SelectContent>
                     {venues.map((venue) => (
                       <SelectItem key={venue.id} value={venue.nombre}>
-                        {venue.nombre} - {venue.location}
+                        {venue.nombre} - {venue.direccion}
                       </SelectItem>
                     ))}
                   </SelectContent>
