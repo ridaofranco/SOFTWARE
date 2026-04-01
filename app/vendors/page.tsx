@@ -1,4 +1,5 @@
 "use client"
+export const dynamic = "force-dynamic"
 
 import { NavBar } from "@/components/nav-bar"
 import { VendorManagement } from "@/components/vendor-management"
@@ -13,7 +14,6 @@ export default function VendorsPage() {
           <div className="flex items-center justify-between">
             <h2 className="text-3xl font-bold tracking-tight">Proveedores</h2>
           </div>
-
           <Card>
             <CardHeader>
               <CardTitle>Gestión de Proveedores</CardTitle>

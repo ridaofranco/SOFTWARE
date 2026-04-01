@@ -24,10 +24,7 @@ import { NavBar } from "@/components/nav-bar"
 import { ExportButton } from "@/components/export-button"
 
 export default function BudgetPage() {
-  const events = useEventStore((state) => state.events)
-  const getTotalBudgetAllEvents = useEventStore((state) => state.getTotalBudgetAllEvents)
-  const getTotalActualAllEvents = useEventStore((state) => state.getTotalActualAllEvents)
-  const getTotalDeviationAllEvents = useEventStore((state) => state.getTotalDeviationAllEvents)
+  const { events, getTotalBudgetAllEvents, getTotalActualAllEvents, getTotalDeviationAllEvents } = useEventStore()
 
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedEvent, setSelectedEvent] = useState("all")

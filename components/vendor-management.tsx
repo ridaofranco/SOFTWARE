@@ -87,7 +87,7 @@ export function VendorManagement() {
   } = useVendorStore()
 
   // Obtener eventos para los selectores
-  const events = useEventStore((state) => state.events)
+  const { events } = useEventStore()
 
   // Inicializar datos al montar el componente
   useEffect(() => {

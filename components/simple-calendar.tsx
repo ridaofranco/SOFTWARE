@@ -8,7 +8,7 @@ import { parse, isSameDay } from "date-fns"
 
 export function SimpleCalendar() {
   const router = useRouter()
-  const events = useEventStore((state) => state.events)
+  const { events } = useEventStore()
   const [currentDate, setCurrentDate] = useState(new Date(2025, 3, 23)) // Abril 2025, día 23 seleccionado
 
   const monthNames = [

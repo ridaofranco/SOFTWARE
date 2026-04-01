@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useEventStore } from "@/lib/event-service"
 
 export function FinancialSummary() {
-  const events = useEventStore((state) => state.events)
+  const { events } = useEventStore()
   const [selectedEvent, setSelectedEvent] = useState<string>("all")
 
   // Filter events based on selection

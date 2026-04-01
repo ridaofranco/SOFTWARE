@@ -568,5 +568,6 @@ export const useChatStore = create<ChatState>()(
 // Hook para obtener el usuario actual (simulado)
 export function useCurrentUser() {
   // En una aplicación real, esto vendría de un sistema de autenticación
-  return useChatStore((state) => state.users[0])
+  const { users } = useChatStore()
+  return users[0]
 }

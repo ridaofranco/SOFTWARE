@@ -20,7 +20,7 @@ import {
 } from "recharts"
 
 export function EventComparison() {
-  const events = useEventStore((state) => state.events)
+  const { events } = useEventStore()
   const [selectedEvents, setSelectedEvents] = useState<string[]>([])
 
   // Get filtered events based on selection

@@ -1,6 +1,6 @@
 // Servicio para gestionar proveedores
 import { create } from "zustand"
-import { persist } from "zustand/middleware"
+import { persist, createJSONStorage } from "zustand/middleware"
 
 // Definir tipos para los proveedores
 export interface Vendor {
@@ -1465,6 +1465,9 @@ export const useVendorStore = create<VendorStoreState>()(
     }),
     {
       name: "vendor-store",
+      storage: createJSONStorage(() =>
+        typeof window !== "undefined" ? localStorage : ({ getItem: () => null, setItem: () => {}, removeItem: () => {} } as Storage)
+      ),
     },
   ),
 )

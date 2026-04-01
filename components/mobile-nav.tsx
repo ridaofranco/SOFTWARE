@@ -15,7 +15,7 @@ export function MobileNav() {
 
   // Obtener el número de mensajes no leídos
   const currentUser = useCurrentUser()
-  const getUnreadMessagesCount = useChatStore((state) => state.getUnreadMessagesCount)
+  const { getUnreadMessagesCount } = useChatStore()
   const unreadCount = getUnreadMessagesCount(currentUser.id)
 
   const routes = [

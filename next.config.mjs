@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  experimental: {
+    serverComponentsExternalPackages: ['zustand', 'use-sync-external-store'],
+  },
   eslint: {
     ignoreDuringBuilds: true,
   },
@@ -12,6 +15,10 @@ const nextConfig = {
   },
   env: {
     CUSTOM_KEY: 'my-value',
+  },
+  webpack: (config) => {
+    config.output.hashFunction = 'sha256'
+    return config
   },
 }
 

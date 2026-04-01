@@ -23,11 +23,7 @@ interface ExportButtonProps {
 
 export function ExportButton({ type, eventId, className }: ExportButtonProps) {
   const [isExporting, setIsExporting] = useState(false)
-  const events = useEventStore((state) => state.events)
-  const tasks = useEventStore((state) => state.tasks)
-  const getEvent = useEventStore((state) => state.getEvent)
-  const getBudgetItemsByEvent = useEventStore((state) => state.getBudgetItemsByEvent)
-  const getTasksByEvent = useEventStore((state) => state.getTasksByEvent)
+  const { events, tasks, getEvent, getBudgetItemsByEvent, getTasksByEvent } = useEventStore()
 
   const handleExport = (format: "csv" | "excel") => {
     setIsExporting(true)

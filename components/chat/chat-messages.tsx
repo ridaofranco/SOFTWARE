@@ -17,12 +17,7 @@ export function ChatMessages() {
   const [message, setMessage] = useState("")
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const currentUser = useCurrentUser()
-  const activeConversationId = useChatStore((state) => state.activeConversationId)
-  const conversations = useChatStore((state) => state.conversations)
-  const getMessagesByConversation = useChatStore((state) => state.getMessagesByConversation)
-  const sendMessage = useChatStore((state) => state.sendMessage)
-  const markConversationAsRead = useChatStore((state) => state.markConversationAsRead)
-  const users = useChatStore((state) => state.users)
+  const { activeConversationId, conversations, getMessagesByConversation, sendMessage, markConversationAsRead, users } = useChatStore()
 
   const activeConversation = conversations.find((conv) => conv.id === activeConversationId)
   const messages = activeConversationId ? getMessagesByConversation(activeConversationId) : []

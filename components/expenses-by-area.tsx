@@ -19,7 +19,7 @@ import {
 } from "recharts"
 
 export function ExpensesByArea() {
-  const events = useEventStore((state) => state.events)
+  const { events } = useEventStore()
   const [selectedEvent, setSelectedEvent] = useState("all")
 
   // Get expenses by area for a specific event or all events

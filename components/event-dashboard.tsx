@@ -22,9 +22,7 @@ export default function EventDashboard({ eventId }: EventDashboardProps) {
   const [isLoading, setIsLoading] = useState(true)
   const { toast } = useToast()
 
-  const getBudgetItemsByEvent = useEventStore((state) => state.getBudgetItemsByEvent)
-  const getTasksByEvent = useEventStore((state) => state.getTasksByEvent)
-  const getEvent = useEventStore((state) => state.getEvent)
+  const { getBudgetItemsByEvent, getTasksByEvent, getEvent } = useEventStore()
 
   // Cargar datos del evento
   useEffect(() => {

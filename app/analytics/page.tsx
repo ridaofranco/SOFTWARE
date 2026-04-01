@@ -12,10 +12,10 @@ import { NavBar } from "@/components/nav-bar"
 import { ExportButton } from "@/components/export-button"
 
 export default function AnalyticsPage() {
-  const events = useEventStore((state) => state.events)
-  const totalBudget = useEventStore((state) => state.getTotalBudgetAllEvents())
-  const totalActual = useEventStore((state) => state.getTotalActualAllEvents())
-  const totalDeviation = useEventStore((state) => state.getTotalDeviationAllEvents())
+  const { events, getTotalBudgetAllEvents, getTotalActualAllEvents, getTotalDeviationAllEvents } = useEventStore()
+  const totalBudget = getTotalBudgetAllEvents()
+  const totalActual = getTotalActualAllEvents()
+  const totalDeviation = getTotalDeviationAllEvents()
 
   return (
     <div className="flex min-h-screen flex-col">

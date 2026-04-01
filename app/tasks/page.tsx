@@ -6,7 +6,7 @@ import { useEventStore } from "@/lib/event-service"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 export default function TasksPage() {
-  const tasks = useEventStore((state) => state.tasks)
+  const { tasks } = useEventStore()
 
   return (
     <div className="flex min-h-screen flex-col">

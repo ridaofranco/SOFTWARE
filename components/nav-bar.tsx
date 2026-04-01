@@ -14,7 +14,7 @@ interface NavBarProps {
 export function NavBar({ showSettings = true }: NavBarProps) {
   // Obtener el número de mensajes no leídos
   const currentUser = useCurrentUser()
-  const getUnreadMessagesCount = useChatStore((state) => state.getUnreadMessagesCount)
+  const { getUnreadMessagesCount } = useChatStore()
   const unreadCount = getUnreadMessagesCount(currentUser.id)
 
   return (

@@ -27,7 +27,7 @@ export function EventCalendar() {
   const router = useRouter()
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [showNewEventDialog, setShowNewEventDialog] = useState(false)
-  const events = useEventStore((state) => state.events)
+  const { events } = useEventStore()
 
   // Memoize calendar events to prevent unnecessary recalculations
   const calendarEvents = useMemo(() => {

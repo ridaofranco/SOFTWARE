@@ -32,10 +32,8 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
   const [selectedEvent, setSelectedEvent] = useState<string>("")
 
   const currentUser = useCurrentUser()
-  const users = useChatStore((state) => state.users)
-  const events = useEventStore((state) => state.events)
-  const createConversation = useChatStore((state) => state.createConversation)
-  const setActiveConversation = useChatStore((state) => state.setActiveConversation)
+  const { users, createConversation, setActiveConversation } = useChatStore()
+  const { events } = useEventStore()
 
   // Filtrar usuarios por búsqueda y excluir al usuario actual
   const filteredUsers = users

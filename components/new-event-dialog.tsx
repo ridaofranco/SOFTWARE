@@ -35,7 +35,7 @@ interface NewEventDialogProps {
 
 export function NewEventDialog({ initialDate }: NewEventDialogProps) {
   const router = useRouter()
-  const addEvent = useEventStore((state) => state.addEvent)
+  const { addEvent } = useEventStore()
 
   const [startDate, setStartDate] = useState<Date | undefined>(initialDate)
   const [endDate, setEndDate] = useState<Date | undefined>()

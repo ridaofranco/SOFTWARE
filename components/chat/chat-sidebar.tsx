@@ -19,11 +19,8 @@ export function ChatSidebar() {
   const [searchTerm, setSearchTerm] = useState("")
   const [isNewChatOpen, setIsNewChatOpen] = useState(false)
   const currentUser = useCurrentUser()
-  const conversations = useChatStore((state) => state.conversations)
-  const users = useChatStore((state) => state.users)
-  const events = useEventStore((state) => state.events)
-  const activeConversationId = useChatStore((state) => state.activeConversationId)
-  const setActiveConversation = useChatStore((state) => state.setActiveConversation)
+  const { conversations, users, activeConversationId, setActiveConversation } = useChatStore()
+  const { events } = useEventStore()
 
   const isMobile = useMediaQuery("(max-width: 768px)")
 

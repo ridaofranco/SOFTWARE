@@ -48,7 +48,7 @@ export function ImportExcelDialog({ eventId, onImportComplete }: ImportExcelDial
   const [isOpen, setIsOpen] = useState(false)
 
   const { toast } = useToast()
-  const events = useEventStore((state) => state.events)
+  const { events } = useEventStore()
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0]

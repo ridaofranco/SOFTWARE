@@ -1,6 +1,6 @@
 // Centralized data service for the event management system
 import { create } from "zustand"
-import { persist } from "zustand/middleware"
+import { persist, createJSONStorage } from "zustand/middleware"
 
 // Define types for our data models
 export type ItemCategory = "Arte" | "Booking" | "Marketing"
@@ -598,6 +598,9 @@ export const useEventStore = create<EventStoreState>()(
     }),
     {
       name: "event-management-store",
+      storage: createJSONStorage(() =>
+        typeof window !== "undefined" ? localStorage : ({ getItem: () => null, setItem: () => {}, removeItem: () => {} } as Storage)
+      ),
     },
   ),
 )

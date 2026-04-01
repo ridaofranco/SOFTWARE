@@ -30,8 +30,7 @@ export interface Notification {
 export function NotificationsMenu() {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
-  const events = useEventStore((state) => state.events)
-  const tasks = useEventStore((state) => state.tasks)
+  const { events, tasks } = useEventStore()
 
   // Generate notifications based on events and tasks
   useEffect(() => {
